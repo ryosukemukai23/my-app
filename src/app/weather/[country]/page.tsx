@@ -1,0 +1,140 @@
+// app/weather/[country]/page.tsx
+"use client";
+
+import ErrorMessage from "@/components/ErrorMessage";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import {useLanguage} from "@/hooks/useLanguage";
+import {useSpotifyCountryChart} from "@/hooks/useSpotifyAPI";
+import {validateImageUrl} from "@/utils/apiUtils";
+import {Music, Play} from "lucide-react";
+import {useParams} from "next/navigation";
+
+export default function WeatherDetailPage() {
+  const params = useParams();
+  const countryCode = (params?.country as string) || "JP";
+  const {t} = useLanguage();
+
+  // その国のSpotifyトップチャート取得
+  const {playlist, loading, error} = useSpotifyCountryChart(countryCode, 10);
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto">
+        {/* ヘッダー */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-black dark:text-white mb-2 flex items-center">
+            <Music className="w-8 h-8 mr-3" />
+            {countryCode} - {t("sidebar.music")}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            この国で人気の音楽トップチャート
+          </p>
+        </div>
+
+        {/* ローディング */}
+        {loading && (
+          <div className="flex justify-center py-12">
+            <LoadingSpinner size="lg" />
+          </div>
+        )}
+
+        {/* エラー */}
+        {error && <ErrorMessage message={error} />}
+
+        {/* プレイリスト */}
+        {!loading && !error && playlist && (
+          <div className="space-y-6">
+            {/* プレイリスト情報 */}
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-card dark:shadow-card-dark overflow-hidden">
+              <div className="flex flex-col md:flex-row">
+                {/* プレイリスト画像 */}
+                {playlist.images && playlist.images[0] && (
+                  <img
+                    src={validateImageUrl(playlist.images[0].url)}
+                    alt={playlist.name}
+                    className="w-full md:w-64 h-64 object-cover"
+                  />
+                )}
+
+                {/* プレイリスト詳細 */}
+                <div className="p-6 flex-1">
+                  <h2 className="text-2xl font-bold text-black dark:text-white mb-2">
+                    {playlist.name}
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    {playlist.description}
+                  </p>
+                  <a
+                    href={playlist.external_urls.spotify}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-6 py-3 bg-[#1DB954] text-white rounded-full hover:bg-[#1ed760] transition-colors font-medium"
+                  >
+                    <Play className="w-5 h-5 mr-2" />
+                    Spotifyで聴く
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* トラックリスト */}
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-card dark:shadow-card-dark p-6">
+              <h3 className="text-xl font-bold text-black dark:text-white mb-4">
+                トラックリスト
+              </h3>
+              <div className="space-y-3">
+                {playlist.tracks.items.slice(0, 10).map((item, index) => (
+                  <a
+                    key={item.track.id}
+                    href={item.track.external_urls.spotify}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
+                  >
+                    {/* 順位 */}
+                    <div className="w-8 text-center">
+                      <span className="text-lg font-bold text-gray-400 dark:text-gray-600 group-hover:text-accent">
+                        {index + 1}
+                      </span>
+                    </div>
+
+                    {/* アルバムアート */}
+                    <img
+                      src={validateImageUrl(item.track.album.images[0]?.url)}
+                      alt={item.track.name}
+                      className="w-16 h-16 rounded-lg object-cover"
+                    />
+
+                    {/* トラック情報 */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base font-medium text-black dark:text-white group-hover:text-accent transition-colors truncate">
+                        {item.track.name}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                        {item.track.artists
+                          .map((artist) => artist.name)
+                          .join(", ")}
+                      </p>
+                    </div>
+
+                    {/* 再生アイコン */}
+                    <Play className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* データなし */}
+        {!loading && !error && !playlist && (
+          <div className="text-center py-12">
+            <p className="text-gray-500 dark:text-gray-400 text-lg">
+              {t("common.noData")}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
