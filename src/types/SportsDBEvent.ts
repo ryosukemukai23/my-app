@@ -1,0 +1,100 @@
+// types/SportsDBEvent.ts
+export interface SportsDBEvent {
+  idEvent: string;
+  idSoccerXML: string | null;
+  idAPIfootball: string | null;
+  strEvent: string;
+  strEventAlternate: string | null;
+  strFilename: string;
+  strSport: string;
+  idLeague: string;
+  strLeague: string;
+  strSeason: string;
+  strDescriptionEN: string | null;
+  strHomeTeam: string;
+  strAwayTeam: string;
+  intHomeScore: string | null;
+  intRound: string;
+  intAwayScore: string | null;
+  intSpectators: string | null;
+  strHomeGoalDetails: string | null;
+  strHomeRedCards: string | null;
+  strHomeYellowCards: string | null;
+  strHomeLineupGoalkeeper: string | null;
+  strHomeLineupDefense: string | null;
+  strHomeLineupMidfield: string | null;
+  strHomeLineupForward: string | null;
+  strHomeLineupSubstitutes: string | null;
+  strHomeFormation: string | null;
+  strAwayRedCards: string | null;
+  strAwayYellowCards: string | null;
+  strAwayGoalDetails: string | null;
+  strAwayLineupGoalkeeper: string | null;
+  strAwayLineupDefense: string | null;
+  strAwayLineupMidfield: string | null;
+  strAwayLineupForward: string | null;
+  strAwayLineupSubstitutes: string | null;
+  strAwayFormation: string | null;
+  intHomeShots: string | null;
+  intAwayShots: string | null;
+  dateEvent: string;
+  strDate: string | null;
+  strTime: string | null;
+  strTimeLocal: string | null;
+  strTVStation: string | null;
+  idHomeTeam: string;
+  idAwayTeam: string;
+  strResult: string | null;
+  strVenue: string | null;
+  strCountry: string | null;
+  strCity: string | null;
+  strPoster: string | null;
+  strSquare: string | null;
+  strFanart: string | null;
+  strThumb: string | null;
+  strBanner: string | null;
+  strMap: string | null;
+  strTweet1: string | null;
+  strTweet2: string | null;
+  strTweet3: string | null;
+  strVideo: string | null;
+  strStatus: string;
+  strPostponed: string;
+  strLocked: string;
+}
+
+export interface SportsDBTeam {
+  idTeam: string;
+  strTeam: string;
+  strTeamShort: string | null;
+  strAlternate: string | null;
+  intFormedYear: string;
+  strSport: string;
+  strLeague: string;
+  idLeague: string;
+  strStadium: string;
+  strKeywords: string | null;
+  strStadiumThumb: string | null;
+  strStadiumDescription: string | null;
+  strStadiumLocation: string | null;
+  intStadiumCapacity: string;
+  strWebsite: string;
+  strFacebook: string;
+  strTwitter: string;
+  strInstagram: string;
+  strDescriptionEN: string | null;
+  strCountry: string;
+  strTeamBadge: string | null;
+  strTeamJersey: string | null;
+  strTeamLogo: string | null;
+  strTeamFanart1: string | null;
+  strTeamFanart2: string | null;
+  strTeamFanart3: string | null;
+  strTeamFanart4: string | null;
+  strTeamBanner: string | null;
+}
+
+export interface SportsDBResponse {
+  events?: SportsDBEvent[];
+  teams?: SportsDBTeam[];
+}
