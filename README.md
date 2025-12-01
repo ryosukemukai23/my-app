@@ -1,36 +1,187 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# News Portal - AI-Powered News Platform
 
-## Getting Started
+ニュース連動型リッチコンテンツサイト（ポートフォリオ用）
 
-First, run the development server:
+## 🎯 プロジェクト概要
+
+- **デザイン**: 白黒ベース、アクセントカラー #801b2b
+- **機能**: タブ切替型ニュース表示、天気予報、楽天商品表示、Spotify/SportsDB 連携
+- **技術スタック**: Next.js 14 + TypeScript + TailwindCSS + **Material-UI (MUI)**
+- **特徴**: ダークモード対応、多言語対応（日本語/英語）、AI 補助によるレコメンド機能
+
+## 🎨 UI フレームワーク
+
+このプロジェクトは**TailwindCSS と Material-UI のハイブリッド構成**です：
+
+### TailwindCSS
+
+- グローバルスタイル
+- カスタムユーティリティクラス
+- 細かいスタイル調整
+
+### Material-UI (MUI)
+
+- **主要コンポーネント**: Header, ArticleCard, Sidebar, Pagination
+- **テーマシステム**: ライト/ダークモード統一管理
+- **アイコン**: @mui/icons-material
+- **レスポンシブグリッド**: Grid システム
+
+## 🚀 セットアップ
+
+### 1. 依存関係のインストール
+
+```bash
+npm install
+```
+
+必要なパッケージ：
+
+- `@mui/material` - MUI コアライブラリ
+- `@emotion/react` - MUI のスタイリングエンジン
+- `@emotion/styled` - スタイル付きコンポーネント
+- `@mui/icons-material` - MUI アイコン
+- `lucide-react` - 補助アイコン
+
+### 2. 環境変数の設定
+
+`.env.local.example` を `.env.local` にコピーして、API キーを設定してください。
+
+```bash
+cp .env.local.example .env.local
+```
+
+### 3. 開発サーバーの起動
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ブラウザで [http://localhost:3000](http://localhost:3000) を開きます。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📁 ディレクトリ構造
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+/src
+├─ /app                 # Next.js App Router
+│   ├─ /[lang]         # 言語別ルーティング (MUI版)
+│   │   └─ /[category] # カテゴリ別ページ (MUI版)
+│   ├─ /article/[id]   # 記事詳細ページ
+│   └─ /weather/[country] # 天気詳細ページ
+├─ /components         # コンポーネント
+│   ├─ /MUI           # MUI版コンポーネント ⭐
+│   │   ├─ MuiHeader.tsx
+│   │   ├─ MuiArticleCard.tsx
+│   │   ├─ MuiSidebar.tsx
+│   │   └─ MuiPagination.tsx
+│   ├─ /3D            # 3Dコンポーネント
+│   └─ (その他)
+├─ /theme             # MUIテーマ ⭐
+│   └─ muiTheme.ts
+├─ /hooks             # カスタムフック
+├─ /contexts          # Context API
+│   ├─ DarkModeContext.tsx
+│   ├─ LanguageContext.tsx
+│   └─ MuiThemeContext.tsx ⭐
+├─ /types             # 型定義
+├─ /utils             # ユーティリティ
+└─ /styles            # スタイル
+```
 
-## Learn More
+## 🎨 MUI 実装詳細
 
-To learn more about Next.js, take a look at the following resources:
+### テーマ設定
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`src/theme/muiTheme.ts` でライト/ダークモードのテーマを定義：
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- プライマリカラー: #801b2b (アクセントカラー)
+- カスタムシャドウ
+- タイポグラフィ設定
 
-## Deploy on Vercel
+### Context 統合
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`app/layout.tsx` で以下の順序で Provider 配置：
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. DarkModeProvider
+2. LanguageProvider
+3. **MuiThemeProvider** ← ダークモード状態を監視
+
+### MUI vs Tailwind 使い分け
+
+| 要素               | 使用技術 | 理由                        |
+| ------------------ | -------- | --------------------------- |
+| Header             | MUI      | AppBar, Tabs, IconButton    |
+| ArticleCard        | MUI      | Card, CardMedia, Typography |
+| Sidebar            | MUI      | Card, List, Avatar          |
+| Pagination         | MUI      | Pagination コンポーネント   |
+| 3D アイコン        | Canvas   | カスタム 3D 効果            |
+| グローバルスタイル | Tailwind | 統一されたユーティリティ    |
+
+## 🎯 主な機能
+
+### ニュース表示
+
+- The News API を使用した記事取得
+- カテゴリ別表示（11 カテゴリ）
+- フリーワード検索（top カテゴリ）
+- **MUI Pagination** によるページネーション
+
+### サイドバー
+
+- **MUI Card** ベースのレイアウト
+- 現在地の天気 + 5 日間予報
+- 楽天商品トップ 5 件表示
+- Spotify 音楽表示（Entertainment カテゴリ）
+- SportsDB 情報表示（Sports カテゴリ）
+
+### UI/UX
+
+- **MUI AppBar** によるヘッダー
+- **MUI Tabs** によるカテゴリナビゲーション
+- **MUI Theme** によるダークモード対応
+- レスポンシブ **Grid** システム
+- 3D 天気アイコン・ロゴ
+
+## 🔑 使用 API
+
+| API            | 用途             | API キー                   |
+| -------------- | ---------------- | -------------------------- |
+| The News API   | ニュース記事取得 | 必須                       |
+| OpenWeatherMap | 天気情報         | 必須                       |
+| Rakuten API    | 商品情報         | 必須                       |
+| Spotify API    | 音楽情報         | 必須（Client ID + Secret） |
+| SportsDB API   | スポーツ情報     | 不要（無料版）             |
+
+## 🛠️ 技術スタック
+
+- **フレームワーク**: Next.js 14 (App Router)
+- **言語**: TypeScript
+- **UI ライブラリ**: Material-UI (MUI) v5 ⭐
+- **スタイリング**: TailwindCSS v4 + Emotion (MUI)
+- **アイコン**: @mui/icons-material + Lucide React
+- **状態管理**: React Context API
+- **データ取得**: Fetch API
+
+## 📊 ポートフォリオアピールポイント
+
+✅ **モダンな UI フレームワーク**: MUI v5 の最新機能を活用  
+✅ **ハイブリッド構成**: Tailwind + MUI の組み合わせスキル  
+✅ **テーマシステム**: ダークモード完全対応  
+✅ **レスポンシブデザイン**: MUI Grid による柔軟なレイアウト  
+✅ **TypeScript 完全対応**: 型安全な実装  
+✅ **複数 API 統合**: 5 つの外部 API を統合管理
+
+## 📝 TODO
+
+- [ ] MUI 版 記事詳細ページ作成
+- [ ] MUI 版 天気詳細ページ作成
+- [ ] MUI Dialog によるモーダル実装
+- [ ] MUI Snackbar によるトースト通知
+- [ ] アクセシビリティの向上
+
+## 📄 ライセンス
+
+MIT License
+
+## 👤 作成者
+
+Your Name - Portfolio Project
