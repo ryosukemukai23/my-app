@@ -13,6 +13,8 @@ import {useCallback, useEffect, useState} from "react";
 
 const NEWS_API_KEY = "REMOVED";
 const NEWS_API_BASE_URL = "https://api.thenewsapi.com/v1/news";
+const PLACEHOLDER_IMAGE =
+  "https://placehold.jp/cccccc/ffffff/800x500.png?text=newsportal";
 
 interface UseNewsAPIParams {
   category?: string;
@@ -21,6 +23,19 @@ interface UseNewsAPIParams {
   limit?: number;
   search?: string;
 }
+
+// ✅ 画像URLを正規化（ダミー画像を設定）
+const normalizeArticleImage = (article: Article): Article => {
+  return {
+    ...article,
+    image_url: article.image_url || PLACEHOLDER_IMAGE,
+  };
+};
+
+// ✅ 記事配列の画像を正規化
+const normalizeArticles = (articles: Article[]): Article[] => {
+  return articles.map(normalizeArticleImage);
+};
 
 // ✅ 期限切れでもキャッシュを取得（402エラー時用）
 const getExpiredCache = <T>(key: string): T | null => {
@@ -59,7 +74,7 @@ export const useNewsAPI = ({
       cacheKey
     );
     if (cached) {
-      setArticles(cached.articles);
+      setArticles(normalizeArticles(cached.articles));
       setTotalPages(cached.totalPages);
       setLoading(false);
       return;
@@ -75,7 +90,7 @@ export const useNewsAPI = ({
         totalPages: number;
       }>(cacheKey);
       if (expiredCache) {
-        setArticles(expiredCache.articles);
+        setArticles(normalizeArticles(expiredCache.articles));
         setTotalPages(expiredCache.totalPages);
         setError(
           `APIリミットに達しました (${stats.count}/${stats.total})。キャッシュデータを表示しています。`
@@ -119,7 +134,7 @@ export const useNewsAPI = ({
             totalPages: number;
           }>(cacheKey);
           if (expiredCache) {
-            setArticles(expiredCache.articles);
+            setArticles(normalizeArticles(expiredCache.articles));
             setTotalPages(expiredCache.totalPages);
             setError(
               "APIリミットに達しました。キャッシュデータを表示しています。"
@@ -140,9 +155,10 @@ export const useNewsAPI = ({
 
       console.log("✅ Fetched news:", articles.length, "articles");
 
-      setArticles(articles);
+      const normalizedArticles = normalizeArticles(articles);
+      setArticles(normalizedArticles);
       setTotalPages(totalPages);
-      setCachedData(cacheKey, {articles, totalPages});
+      setCachedData(cacheKey, {articles: normalizedArticles, totalPages});
     } catch (err) {
       console.error("❌ News API error:", err);
 
@@ -152,7 +168,7 @@ export const useNewsAPI = ({
         totalPages: number;
       }>(cacheKey);
       if (expiredCache) {
-        setArticles(expiredCache.articles);
+        setArticles(normalizeArticles(expiredCache.articles));
         setTotalPages(expiredCache.totalPages);
         setError("ネットワークエラー。キャッシュデータを表示しています。");
       } else {
@@ -171,7 +187,7 @@ export const useNewsAPI = ({
   return {articles, loading, error, totalPages, refetch: fetchNews};
 };
 
-// ✅ 類似記事取得（402エラー対応版）
+// ✅ 類似記事取得（402エラー対応版 + ダミー画像対応）
 export const useSimilarArticles = (category: string, limit: number = 3) => {
   const [similarArticles, setSimilarArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -190,7 +206,7 @@ export const useSimilarArticles = (category: string, limit: number = 3) => {
       const cached = getCachedData<Article[]>(cacheKey);
       if (cached) {
         console.log("✅ Using cached similar articles:", cached.length);
-        setSimilarArticles(cached);
+        setSimilarArticles(normalizeArticles(cached));
         setLoading(false);
         return;
       }
@@ -201,7 +217,7 @@ export const useSimilarArticles = (category: string, limit: number = 3) => {
 
         const expiredCache = getExpiredCache<Article[]>(cacheKey);
         if (expiredCache) {
-          setSimilarArticles(expiredCache);
+          setSimilarArticles(normalizeArticles(expiredCache));
           setError("APIリミットに達しました。キャッシュを表示しています。");
         } else {
           setSimilarArticles([]);
@@ -235,7 +251,7 @@ export const useSimilarArticles = (category: string, limit: number = 3) => {
 
             const expiredCache = getExpiredCache<Article[]>(cacheKey);
             if (expiredCache) {
-              setSimilarArticles(expiredCache);
+              setSimilarArticles(normalizeArticles(expiredCache));
               setError("APIリミットに達しました。キャッシュを表示しています。");
               setLoading(false);
               return;
@@ -251,15 +267,16 @@ export const useSimilarArticles = (category: string, limit: number = 3) => {
 
         console.log("✅ Fetched similar articles:", similar.length);
 
-        setSimilarArticles(similar);
-        setCachedData(cacheKey, similar);
+        const normalizedSimilar = normalizeArticles(similar);
+        setSimilarArticles(normalizedSimilar);
+        setCachedData(cacheKey, normalizedSimilar);
       } catch (err) {
         console.error("❌ Error fetching similar articles:", err);
 
         // ✅ エラー時も期限切れキャッシュをチェック
         const expiredCache = getExpiredCache<Article[]>(cacheKey);
         if (expiredCache) {
-          setSimilarArticles(expiredCache);
+          setSimilarArticles(normalizeArticles(expiredCache));
           setError("ネットワークエラー。キャッシュを表示しています。");
         } else {
           setSimilarArticles([]);
