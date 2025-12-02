@@ -90,18 +90,23 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
           alignItems: "stretch",
         }}
       >
-        {/* サムネイル画像 */}
+        {/* サムネイル画像 - サイズ統一 */}
         {article.image_url && (
           <CardMedia
             component="img"
-            height="200"
             image={validateImageUrl(article.image_url)}
             alt={article.title}
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
             }}
             sx={{
-              objectFit: "cover",
+              width: "100%",
+              height: {
+                xs: 300, // スマホ: 200px
+                sm: 400, // タブレット: 240px
+                md: 500, // PC: 280px
+              },
+              objectFit: "cover", // 画像を切り抜いてフィット
             }}
           />
         )}
