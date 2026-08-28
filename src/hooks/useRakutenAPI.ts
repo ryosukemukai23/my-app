@@ -1,19 +1,14 @@
 // hooks/useRakutenAPI.ts
 "use client";
 
-import {RakutenAPIResponse, RakutenProduct} from "@/types/RakutenProduct";
+import { RakutenAPIResponse, RakutenProduct } from "@/types/RakutenProduct";
 import {
   canMakeRequest,
   getCachedData,
   incrementRequestCount,
   setCachedData,
 } from "@/utils/cacheUtils";
-import {useCallback, useEffect, useMemo, useState} from "react";
-
-const RAKUTEN_APP_ID = "1033789594110679388";
-const RAKUTEN_AFFILIATE_ID = "";
-const RAKUTEN_API_BASE_URL =
-  "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface UseRakutenAPIParams {
   keyword?: string;
@@ -119,12 +114,11 @@ export default function useRakutenAPI({
     setError(null);
 
     try {
+      // ✅ applicationId/affiliateIdはサーバー側(API Route)で付与するので
+      //    クライアント側のパラメータからは除外
       const params = new URLSearchParams({
-        applicationId: RAKUTEN_APP_ID,
         hits: hits.toString(),
         page: page.toString(),
-        format: "json",
-        sort: "-reviewCount",
       });
 
       if (finalKeyword) {
@@ -135,11 +129,7 @@ export default function useRakutenAPI({
         params.append("genreId", genreId);
       }
 
-      if (RAKUTEN_AFFILIATE_ID) {
-        params.append("affiliateId", RAKUTEN_AFFILIATE_ID);
-      }
-
-      console.log("🔍 Fetching Rakuten products:", {
+      console.log("🔍 Fetching Rakuten products via proxy:", {
         keyword: finalKeyword,
         newsCategory,
         genreId,
@@ -147,9 +137,8 @@ export default function useRakutenAPI({
         page,
       });
 
-      const response = await fetch(
-        `${RAKUTEN_API_BASE_URL}?${params.toString()}`
-      );
+      // ✅ 楽天APIへ直接ではなく、自前のAPI Route経由で取得
+      const response = await fetch(`/api/rakuten/search?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
@@ -202,7 +191,7 @@ export default function useRakutenAPI({
       setTotalCount(totalCount);
 
       // キャッシュに保存
-      setCachedData(cacheKey, {products: productList, totalCount});
+      setCachedData(cacheKey, { products: productList, totalCount });
     } catch (err) {
       console.error("❌ Rakuten API error:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch products");
