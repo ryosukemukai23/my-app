@@ -37,14 +37,6 @@ export const useNewsAPI = ({
       if (category !== "top") params.set("category", category);
       if (search) params.set("search", search);
 
-      console.log("🔍 Fetching news via /api/news:", {
-        category,
-        language,
-        page,
-        limit,
-        search,
-      });
-
       const response = await fetch(`/api/news?${params.toString()}`);
 
       if (!response.ok) {
@@ -53,8 +45,6 @@ export const useNewsAPI = ({
 
       const data: { articles: Article[]; totalPages: number } =
         await response.json();
-
-      console.log("✅ Fetched news:", data.articles.length, "articles");
 
       setArticles(data.articles);
       setTotalPages(data.totalPages);
@@ -74,7 +64,7 @@ export const useNewsAPI = ({
   return { articles, loading, error, totalPages, refetch: fetchNews };
 };
 
-// ✅ 類似記事取得
+// ✅ 類似記事取得（エラー時に画面を壊さないよう安全設計に改良）
 export const useSimilarArticles = (category: string, limit: number = 3) => {
   const [similarArticles, setSimilarArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -82,7 +72,6 @@ export const useSimilarArticles = (category: string, limit: number = 3) => {
 
   useEffect(() => {
     if (!category) {
-      console.warn("⚠️ No category provided to useSimilarArticles");
       return;
     }
 
@@ -96,11 +85,6 @@ export const useSimilarArticles = (category: string, limit: number = 3) => {
           limit: limit.toString(),
         });
 
-        console.log(
-          "🔍 Fetching similar articles via /api/news/similar:",
-          category,
-        );
-
         const response = await fetch(`/api/news/similar?${params.toString()}`);
 
         if (!response.ok) {
@@ -108,18 +92,11 @@ export const useSimilarArticles = (category: string, limit: number = 3) => {
         }
 
         const data: { articles: Article[] } = await response.json();
-
-        console.log("✅ Fetched similar articles:", data.articles.length);
-
         setSimilarArticles(data.articles);
       } catch (err) {
-        console.error("❌ Error fetching similar articles:", err);
+        console.warn("⚠️ 類似記事の取得をスキップしました:", err);
         setSimilarArticles([]);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to fetch similar articles",
-        );
+        // setError をあえて設定しないことで、余計なエラー枠の表示を防ぐ
       } finally {
         setLoading(false);
       }
