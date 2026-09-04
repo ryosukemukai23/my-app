@@ -2,13 +2,24 @@
 import { Article, NewsAPIResponse } from "@/types/Article";
 import { cache } from "react";
 
-const NEWS_API_KEY = "REMOVED";
+const NEWS_API_KEY = process.env.NEWS_API_KEY as string;
 const NEWS_API_BASE_URL = "https://api.thenewsapi.com/v1/news";
 const PLACEHOLDER_IMAGE =
   "https://placehold.jp/cccccc/ffffff/800x500.png?text=newsportal";
 
 // ✅ 1日1回相当のキャッシュ（無料プランのAPI上限対策）
+// ⚠️ この値は app/[lang]/[category]/page.tsx と
+//    app/[lang]/article/[id]/page.tsx の `export const revalidate`
+//    と必ず同じ値にすること。ルートセグメント側のrevalidateが
+//    ここより短いと、この設定は無視されて短い方が使われる。
 const CACHE_REVALIDATE_SECONDS = 86400; // 24時間
+
+// thenewsapi.comの無料プランは1リクエストあたりの結果セットが
+// limit × page ≤ 20,000 に制限されている。meta.foundは
+// 世界中の一致件数（数百万件になりうる）なので、それをそのまま
+// limitで割るとtotalPagesが非現実的な数値になり、存在しない
+// ページへのリンクが生成されてしまう。ここで上限をキャップする。
+const MAX_RESULT_SET = 20000;
 
 interface FetchNewsParams {
   category?: string;
@@ -26,6 +37,19 @@ const normalizeArticleImage = (article: Article): Article => {
   };
 };
 
+// ✅ meta.foundと無料プランの結果セット上限からtotalPagesを計算
+const calculateTotalPages = (
+  found: number | undefined,
+  limit: number,
+): number => {
+  if (!found || found <= 0) return 1;
+
+  const rawPages = Math.ceil(found / limit);
+  const maxPagesByResultSet = Math.floor(MAX_RESULT_SET / limit);
+
+  return Math.max(1, Math.min(rawPages, maxPagesByResultSet));
+};
+
 // ✅ React cache でサーバー側キャッシュを実装
 export const fetchNewsServer = cache(
   async ({
@@ -41,7 +65,10 @@ export const fetchNewsServer = cache(
     try {
       const params = new URLSearchParams({
         api_token: NEWS_API_KEY,
-        locale: language,
+        // ⚠️ /v1/news/all エンドポイントは `locale` を受け付けない
+        // （`locale`は headlines / top エンドポイント専用）。
+        // 言語を絞り込むには `language` パラメータを使う。
+        language: language,
         limit: limit.toString(),
         page: page.toString(),
       });
@@ -75,7 +102,7 @@ export const fetchNewsServer = cache(
 
       const data: NewsAPIResponse = await response.json();
       const articles = (data.data || []).map(normalizeArticleImage);
-      const totalPages = data.meta ? Math.ceil(data.meta.found / limit) : 1;
+      const totalPages = calculateTotalPages(data.meta?.found, limit);
 
       console.log("✅ [Server] Fetched news:", articles.length, "articles");
 
@@ -106,12 +133,23 @@ export const fetchArticleByIdServer = cache(
       );
 
       if (!response.ok) {
-        console.error(
-          "❌ [Server] UUID fetch error:",
-          response.status,
-          "for id:",
-          articleId,
-        );
+        // 402 (usage_limit_reached) と 404 (resource_not_found) を区別する。
+        // どちらも従来はnullを返してnotFound()に流れていたため、
+        // 「上限到達で記事が取れないだけ」なのに「記事が存在しない」
+        // という誤ったUIになっていた。
+        if (response.status === 402) {
+          console.error(
+            "⚠️ [Server] API利用上限に達しました。記事取得不可:",
+            articleId,
+          );
+        } else {
+          console.error(
+            "❌ [Server] UUID fetch error:",
+            response.status,
+            "for id:",
+            articleId,
+          );
+        }
         return null;
       }
 
@@ -137,7 +175,8 @@ export const fetchSimilarArticlesServer = cache(
     try {
       const params = new URLSearchParams({
         api_token: NEWS_API_KEY,
-        locale: language,
+        // ⚠️ こちらも /all エンドポイントなので `language` を使う（`locale`不可）
+        language: language,
         categories: category,
         limit: limit.toString(),
         sort: "published_at",

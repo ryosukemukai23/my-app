@@ -12,7 +12,9 @@ interface ArticlePageProps {
 }
 
 // ✅ 動的メタデータ生成（SEO対策）
-export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: ArticlePageProps): Promise<Metadata> {
   const { lang, id } = await params;
   const article = await fetchArticleByIdServer(id, lang);
 
@@ -46,7 +48,7 @@ export async function generateStaticParams() {
   try {
     // 最新記事50件を事前生成
     const { articles } = await fetchNewsServer({ limit: 50 });
-    
+
     return articles.map((article) => ({
       id: article.uuid,
     }));
@@ -59,7 +61,7 @@ export async function generateStaticParams() {
 // ✅ サーバーコンポーネント
 export default async function ArticlePage({ params }: ArticlePageProps) {
   const { lang, id } = await params;
-  
+
   // サーバー側で記事データ取得
   const article = await fetchArticleByIdServer(id, lang);
 
@@ -73,4 +75,6 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
 // ✅ 動的レンダリング設定
 export const dynamic = "force-static";
-export const revalidate = 300; // 5分ごとに再生成
+// serverNewsAPI.ts のfetch revalidate(86400)と必ず一致させる。
+// ここが短いと、fetch側のキャッシュ意図が無視されて毎回API課金枠を消費する。
+export const revalidate = 86400; // 24時間ごとに再生成（serverNewsAPI.tsと統一）
