@@ -69,6 +69,7 @@ const normalizeArticle = (item: NewsDataArticle): Article => ({
   source: item.source_name || item.source_id,
   categories: item.category || [],
   url: item.link,
+  locale: item.language,
 });
 
 // 一覧取得
