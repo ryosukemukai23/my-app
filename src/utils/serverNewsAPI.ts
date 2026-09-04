@@ -19,7 +19,6 @@ const CATEGORY_MAP: Record<string, string | undefined> = {
   entertainment: "entertainment",
   science: "science",
   health: "health",
-  // ✅ 新規追加（サイトのカテゴリページを増やす場合に使う）
   politics: "politics",
   world: "world",
   environment: "environment",
@@ -29,6 +28,7 @@ const CATEGORY_MAP: Record<string, string | undefined> = {
   education: "education",
   crime: "crime",
 };
+
 interface NewsDataArticle {
   article_id: string;
   title: string;
@@ -54,6 +54,7 @@ interface FetchNewsParams {
   category?: string;
   language?: string;
   cursor?: string;
+  page?: string; // ✅ page プロパティを追加
   limit?: number;
   search?: string;
 }
@@ -76,6 +77,7 @@ export const fetchNewsServer = cache(
     category = "top",
     language = "ja",
     cursor,
+    page, // ✅ page を取得
     limit = FREE_PLAN_MAX_SIZE,
     search = "",
   }: FetchNewsParams = {}): Promise<{
@@ -83,7 +85,6 @@ export const fetchNewsServer = cache(
     nextPage: string | null;
   }> => {
     try {
-      // ✅ idパラメータは単一記事取得専用。一覧取得ではlanguageのみ使う
       const params = new URLSearchParams({
         apikey: NEWSDATA_API_KEY,
         language,
@@ -97,14 +98,17 @@ export const fetchNewsServer = cache(
       if (search) {
         params.append("q", search);
       }
-      if (cursor) {
-        params.append("page", cursor);
+
+      // ✅ page または cursor のどちらが指定されても 'page' パラメータとして追加
+      const nextPageToken = page || cursor;
+      if (nextPageToken) {
+        params.append("page", nextPageToken);
       }
 
       console.log("🔍 [Server] Fetching news (NewsData.io):", {
         category,
         language,
-        cursor,
+        cursor: nextPageToken,
         search,
       });
 
@@ -153,8 +157,6 @@ export const fetchArticleByIdServer = cache(
     }
 
     try {
-      // ✅ NewsData.io仕様：idはapikey以外のパラメータと併用不可（TooManyFilterエラーになる）
-      //   languageはあえて渡さない
       const params = new URLSearchParams({
         apikey: NEWSDATA_API_KEY,
         id: articleId,
