@@ -1,165 +1,208 @@
 // utils/serverNewsAPI.ts
-import { Article, NewsAPIResponse } from "@/types/Article";
+import { Article } from "@/types/Article";
+import { cacheArticle, getCachedArticle } from "@/utils/redisClient";
 import { cache } from "react";
 
-const NEWS_API_KEY = process.env.NEWS_API_KEY as string;
-const NEWS_API_BASE_URL = "https://api.thenewsapi.com/v1/news";
+const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY as string;
+const NEWSDATA_BASE_URL = "https://newsdata.io/api/1/latest";
 const PLACEHOLDER_IMAGE =
   "https://placehold.jp/cccccc/ffffff/800x500.png?text=newsportal";
 
-// ✅ 1日1回相当のキャッシュ（無料プランのAPI上限対策）
-// ⚠️ この値は app/[lang]/[category]/page.tsx と
-//    app/[lang]/article/[id]/page.tsx の `export const revalidate`
-//    と必ず同じ値にすること。ルートセグメント側のrevalidateが
-//    ここより短いと、この設定は無視されて短い方が使われる。
-const CACHE_REVALIDATE_SECONDS = 86400; // 24時間
+const FREE_PLAN_MAX_SIZE = 10;
 
-// thenewsapi.comの無料プランは1リクエストあたりの結果セットが
-// limit × page ≤ 20,000 に制限されている。meta.foundは
-// 世界中の一致件数（数百万件になりうる）なので、それをそのまま
-// limitで割るとtotalPagesが非現実的な数値になり、存在しない
-// ページへのリンクが生成されてしまう。ここで上限をキャップする。
-const MAX_RESULT_SET = 20000;
+const CATEGORY_MAP: Record<string, string | undefined> = {
+  top: undefined, // カテゴリ指定なし＝トップニュース扱い
+  business: "business",
+  tech: "technology",
+  technology: "technology",
+  sports: "sports",
+  entertainment: "entertainment",
+  science: "science",
+  health: "health",
+  // ✅ 新規追加（サイトのカテゴリページを増やす場合に使う）
+  politics: "politics",
+  world: "world",
+  environment: "environment",
+  lifestyle: "lifestyle",
+  food: "food",
+  tourism: "tourism",
+  education: "education",
+  crime: "crime",
+};
+interface NewsDataArticle {
+  article_id: string;
+  title: string;
+  link: string;
+  description: string | null;
+  content: string | null;
+  pubDate: string;
+  image_url: string | null;
+  source_id: string;
+  source_name?: string;
+  category?: string[];
+  language: string;
+}
+
+interface NewsDataResponse {
+  status: string;
+  totalResults?: number;
+  results: NewsDataArticle[];
+  nextPage?: string | null;
+}
 
 interface FetchNewsParams {
   category?: string;
   language?: string;
-  page?: number;
+  cursor?: string;
   limit?: number;
   search?: string;
 }
 
-// ✅ 画像URLを正規化
-const normalizeArticleImage = (article: Article): Article => {
-  return {
-    ...article,
-    image_url: article.image_url || PLACEHOLDER_IMAGE,
-  };
-};
+const normalizeArticle = (item: NewsDataArticle): Article => ({
+  uuid: item.article_id,
+  title: item.title,
+  description: item.description || "",
+  content: item.content || "",
+  image_url: item.image_url || PLACEHOLDER_IMAGE,
+  published_at: item.pubDate,
+  source: item.source_name || item.source_id,
+  categories: item.category || [],
+  url: item.link,
+});
 
-// ✅ meta.foundと無料プランの結果セット上限からtotalPagesを計算
-const calculateTotalPages = (
-  found: number | undefined,
-  limit: number,
-): number => {
-  if (!found || found <= 0) return 1;
-
-  const rawPages = Math.ceil(found / limit);
-  const maxPagesByResultSet = Math.floor(MAX_RESULT_SET / limit);
-
-  return Math.max(1, Math.min(rawPages, maxPagesByResultSet));
-};
-
-// ✅ React cache でサーバー側キャッシュを実装
+// ✅ 一覧取得
 export const fetchNewsServer = cache(
   async ({
-    category = "general",
+    category = "top",
     language = "ja",
-    page = 1,
-    limit = 10,
+    cursor,
+    limit = FREE_PLAN_MAX_SIZE,
     search = "",
   }: FetchNewsParams = {}): Promise<{
     articles: Article[];
-    totalPages: number;
+    nextPage: string | null;
   }> => {
     try {
+      // ✅ idパラメータは単一記事取得専用。一覧取得ではlanguageのみ使う
       const params = new URLSearchParams({
-        api_token: NEWS_API_KEY,
-        // ⚠️ /v1/news/all エンドポイントは `locale` を受け付けない
-        // （`locale`は headlines / top エンドポイント専用）。
-        // 言語を絞り込むには `language` パラメータを使う。
-        language: language,
-        limit: limit.toString(),
-        page: page.toString(),
+        apikey: NEWSDATA_API_KEY,
+        language,
+        size: Math.min(limit, FREE_PLAN_MAX_SIZE).toString(),
       });
 
-      if (category !== "top" && category !== "general") {
-        params.append("categories", category);
+      const mappedCategory = CATEGORY_MAP[category.toLowerCase()];
+      if (mappedCategory) {
+        params.append("category", mappedCategory);
       }
       if (search) {
-        params.append("search", search);
+        params.append("q", search);
+      }
+      if (cursor) {
+        params.append("page", cursor);
       }
 
-      console.log("🔍 [Server] Fetching news:", {
+      console.log("🔍 [Server] Fetching news (NewsData.io):", {
         category,
         language,
-        page,
-        limit,
+        cursor,
         search,
       });
 
       const response = await fetch(
-        `${NEWS_API_BASE_URL}/all?${params.toString()}`,
+        `${NEWSDATA_BASE_URL}?${params.toString()}`,
         {
-          next: { revalidate: CACHE_REVALIDATE_SECONDS },
+          next: { revalidate: 3600 },
         },
       );
 
       if (!response.ok) {
-        console.error("❌ [Server] API Error:", response.status);
-        return { articles: [], totalPages: 1 };
+        const errorBody = await response.text();
+        console.error(
+          "❌ [Server] News list fetch error:",
+          response.status,
+          errorBody,
+        );
+        return { articles: [], nextPage: null };
       }
 
-      const data: NewsAPIResponse = await response.json();
-      const articles = (data.data || []).map(normalizeArticleImage);
-      const totalPages = calculateTotalPages(data.meta?.found, limit);
+      const data: NewsDataResponse = await response.json();
+      const articles = (data.results || []).map(normalizeArticle);
+
+      await Promise.all(articles.map((a) => cacheArticle(a.uuid, a)));
 
       console.log("✅ [Server] Fetched news:", articles.length, "articles");
 
-      return { articles, totalPages };
+      return { articles, nextPage: data.nextPage || null };
     } catch (error) {
       console.error("❌ [Server] News API error:", error);
-      return { articles: [], totalPages: 1 };
+      return { articles: [], nextPage: null };
     }
   },
 );
 
-// ✅ 単一記事取得（記事詳細ページ用）— UUID指定の専用エンドポイントを使用
+// ✅ 単一記事取得
 export const fetchArticleByIdServer = cache(
   async (
     articleId: string,
     language: string = "ja",
   ): Promise<Article | null> => {
-    try {
-      const params = new URLSearchParams({ api_token: NEWS_API_KEY });
+    const cached = await getCachedArticle<Article>(articleId);
+    if (cached) {
+      console.log("✅ [Server] Article served from Redis cache:", articleId);
+      return cached;
+    }
 
-      console.log("🔍 [Server] Fetching article by uuid:", articleId);
+    try {
+      // ✅ NewsData.io仕様：idはapikey以外のパラメータと併用不可（TooManyFilterエラーになる）
+      //   languageはあえて渡さない
+      const params = new URLSearchParams({
+        apikey: NEWSDATA_API_KEY,
+        id: articleId,
+      });
+
+      console.log(
+        "🔍 [Server] Fetching article by id (not in cache):",
+        articleId,
+      );
 
       const response = await fetch(
-        `${NEWS_API_BASE_URL}/uuid/${articleId}?${params.toString()}`,
+        `${NEWSDATA_BASE_URL}?${params.toString()}`,
         {
-          next: { revalidate: CACHE_REVALIDATE_SECONDS },
+          next: { revalidate: 3600 },
         },
       );
 
       if (!response.ok) {
-        // 402 (usage_limit_reached) と 404 (resource_not_found) を区別する。
-        // どちらも従来はnullを返してnotFound()に流れていたため、
-        // 「上限到達で記事が取れないだけ」なのに「記事が存在しない」
-        // という誤ったUIになっていた。
-        if (response.status === 402) {
-          console.error(
-            "⚠️ [Server] API利用上限に達しました。記事取得不可:",
-            articleId,
-          );
-        } else {
-          console.error(
-            "❌ [Server] UUID fetch error:",
-            response.status,
-            "for id:",
-            articleId,
-          );
-        }
+        const errorBody = await response.text();
+        console.error(
+          "❌ [Server] Article fetch error:",
+          response.status,
+          errorBody,
+          "for id:",
+          articleId,
+        );
         return null;
       }
 
-      const article: Article = await response.json();
+      const data: NewsDataResponse = await response.json();
+      const found = data.results?.[0];
 
-      console.log("✅ [Server] Found article:", article.title);
+      if (!found) {
+        console.error(
+          "❌ [Server] Article not found (expired from 48h window?):",
+          articleId,
+        );
+        return null;
+      }
 
-      return normalizeArticleImage(article);
+      const article = normalizeArticle(found);
+      await cacheArticle(article.uuid, article);
+
+      console.log("✅ [Server] Found article via direct fetch:", article.title);
+
+      return article;
     } catch (error) {
-      console.error("❌ [Server] Error fetching article by uuid:", error);
+      console.error("❌ [Server] Error fetching article by id:", error);
       return null;
     }
   },
@@ -174,13 +217,15 @@ export const fetchSimilarArticlesServer = cache(
   ): Promise<Article[]> => {
     try {
       const params = new URLSearchParams({
-        api_token: NEWS_API_KEY,
-        // ⚠️ こちらも /all エンドポイントなので `language` を使う（`locale`不可）
-        language: language,
-        categories: category,
-        limit: limit.toString(),
-        sort: "published_at",
+        apikey: NEWSDATA_API_KEY,
+        language,
+        size: Math.min(limit, FREE_PLAN_MAX_SIZE).toString(),
       });
+
+      const mappedCategory = CATEGORY_MAP[category.toLowerCase()];
+      if (mappedCategory) {
+        params.append("category", mappedCategory);
+      }
 
       console.log(
         "🔍 [Server] Fetching similar articles for category:",
@@ -188,9 +233,9 @@ export const fetchSimilarArticlesServer = cache(
       );
 
       const response = await fetch(
-        `${NEWS_API_BASE_URL}/all?${params.toString()}`,
+        `${NEWSDATA_BASE_URL}?${params.toString()}`,
         {
-          next: { revalidate: CACHE_REVALIDATE_SECONDS },
+          next: { revalidate: 3600 },
         },
       );
 
@@ -198,8 +243,10 @@ export const fetchSimilarArticlesServer = cache(
         return [];
       }
 
-      const data: NewsAPIResponse = await response.json();
-      const articles = (data.data || []).map(normalizeArticleImage);
+      const data: NewsDataResponse = await response.json();
+      const articles = (data.results || []).map(normalizeArticle);
+
+      await Promise.all(articles.map((a) => cacheArticle(a.uuid, a)));
 
       console.log("✅ [Server] Fetched similar articles:", articles.length);
 

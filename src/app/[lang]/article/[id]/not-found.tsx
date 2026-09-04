@@ -1,4 +1,6 @@
 // app/[lang]/article/[id]/not-found.tsx
+"use client";
+
 import { Home } from "@mui/icons-material";
 import { Alert, Box, Button, Container, Typography } from "@mui/material";
 import Link from "next/link";
@@ -24,16 +26,15 @@ export default function NotFound() {
         <Alert severity="warning" sx={{ width: "100%" }}>
           お探しの記事は削除されたか、URLが間違っている可能性があります。
         </Alert>
-        <Link href="/ja/top" passHref legacyBehavior>
-          <Button
-            variant="contained"
-            size="large"
-            startIcon={<Home />}
-            component="a"
-          >
-            トップページに戻る
-          </Button>
-        </Link>
+        <Button
+          component={Link}
+          href="/ja/top"
+          variant="contained"
+          size="large"
+          startIcon={<Home />}
+        >
+          トップページに戻る
+        </Button>
       </Box>
     </Container>
   );

@@ -2,8 +2,8 @@
 "use client";
 
 import Logo3D from "@/components/3D/Logo3D";
-import {useDarkMode} from "@/hooks/useDarkMode";
-import {useLanguage} from "@/hooks/useLanguage";
+import { useDarkMode } from "@/hooks/useDarkMode";
+import { useLanguage } from "@/hooks/useLanguage";
 import {
   Brightness4,
   Brightness7,
@@ -24,30 +24,29 @@ import {
   Typography,
 } from "@mui/material";
 import Link from "next/link";
-import {usePathname, useRouter} from "next/navigation";
-import React, {useState} from "react";
+import { usePathname, useRouter } from "next/navigation";
+import React, { useState } from "react";
 
 const categories = [
   "top",
-  "general",
-  "science",
-  "sports",
   "business",
-  "health",
-  "entertainment",
   "tech",
+  "sports",
+  "entertainment",
+  "science",
+  "health",
   "politics",
   "food",
-  "travel",
+  "tourism", // ✅ "travel" → "tourism"（NewsData.io公式値に統一）
 ];
 
 interface MuiHeaderProps {
   onSearch?: (query: string) => void;
 }
 
-const MuiHeader: React.FC<MuiHeaderProps> = ({onSearch}) => {
-  const {isDarkMode, toggleDarkMode} = useDarkMode();
-  const {language, setLanguage, t} = useLanguage();
+const MuiHeader: React.FC<MuiHeaderProps> = ({ onSearch }) => {
+  const { isDarkMode, toggleDarkMode } = useDarkMode();
+  const { language, setLanguage, t } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,7 +59,7 @@ const MuiHeader: React.FC<MuiHeaderProps> = ({onSearch}) => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!searchQuery.trim()) return;
 
     // ✅ onSearch が渡されている場合（カテゴリーページ内検索）
@@ -92,7 +91,7 @@ const MuiHeader: React.FC<MuiHeaderProps> = ({onSearch}) => {
             alignItems: "center",
           }}
         >
-          <Box sx={{mr: 1.5}}>
+          <Box sx={{ mr: 1.5 }}>
             <Logo3D size={40} />
           </Box>
 
@@ -108,10 +107,10 @@ const MuiHeader: React.FC<MuiHeaderProps> = ({onSearch}) => {
           </Typography>
         </Link>
 
-        <Box sx={{flexGrow: 1}} />
+        <Box sx={{ flexGrow: 1 }} />
 
         {/* 右側コントロール */}
-        <Box sx={{display: "flex", alignItems: "center", gap: 1}}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           {/* ✅ 全ページで検索ボタンを表示 */}
           <IconButton
             onClick={() => setIsSearchOpen(!isSearchOpen)}
@@ -122,7 +121,7 @@ const MuiHeader: React.FC<MuiHeaderProps> = ({onSearch}) => {
 
           <IconButton onClick={handleLanguageToggle} color="inherit">
             <LanguageIcon />
-            <Typography variant="caption" sx={{ml: 0.5, fontWeight: 600}}>
+            <Typography variant="caption" sx={{ ml: 0.5, fontWeight: 600 }}>
               {language.toUpperCase()}
             </Typography>
           </IconButton>
@@ -135,7 +134,7 @@ const MuiHeader: React.FC<MuiHeaderProps> = ({onSearch}) => {
 
       {/* ✅ 検索フォーム（全ページで表示） */}
       <Collapse in={isSearchOpen}>
-        <Box sx={{p: 2, borderTop: 1, borderColor: "divider"}}>
+        <Box sx={{ p: 2, borderTop: 1, borderColor: "divider" }}>
           <form onSubmit={handleSearch}>
             <TextField
               fullWidth
@@ -143,16 +142,14 @@ const MuiHeader: React.FC<MuiHeaderProps> = ({onSearch}) => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={
-                language === "ja"
-                  ? "ニュースを検索..."
-                  : "Search news..."
+                language === "ja" ? "ニュースを検索..." : "Search news..."
               }
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <Button 
-                      type="submit" 
-                      variant="contained" 
+                    <Button
+                      type="submit"
+                      variant="contained"
                       size="small"
                       disabled={!searchQuery.trim()}
                     >
@@ -167,7 +164,7 @@ const MuiHeader: React.FC<MuiHeaderProps> = ({onSearch}) => {
       </Collapse>
 
       {/* カテゴリタブ */}
-      <Box sx={{borderTop: 1, borderColor: "divider", overflowX: "auto"}}>
+      <Box sx={{ borderTop: 1, borderColor: "divider", overflowX: "auto" }}>
         <Tabs
           value={currentIndex >= 0 ? currentIndex : 0}
           onChange={handleTabChange}

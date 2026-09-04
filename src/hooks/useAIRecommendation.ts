@@ -1,7 +1,7 @@
 // hooks/useAIRecommendation.ts
 "use client";
 
-import {useCallback, useState} from "react";
+import { useCallback, useState } from "react";
 
 interface AIRecommendationParams {
   title?: string;
@@ -17,7 +17,7 @@ interface AIRecommendation {
 
 export const useAIRecommendation = () => {
   const [recommendation, setRecommendation] = useState<AIRecommendation | null>(
-    null
+    null,
   );
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,14 +87,14 @@ JSON形式で以下のように出力してください：
         setError(
           err instanceof Error
             ? err.message
-            : "Failed to generate recommendation"
+            : "Failed to generate recommendation",
         );
         setRecommendation(null);
       } finally {
         setLoading(false);
       }
     },
-    []
+    [],
   );
 
   // 楽天商品検索用キーワード生成
@@ -137,7 +137,7 @@ JSON形式で以下のように出力してください：
         return articleTitle.split(" ")[0]; // フォールバック
       }
     },
-    []
+    [],
   );
 
   return {

@@ -2,11 +2,15 @@
 "use client";
 
 import MuiSidebar from "@/components/MUI/MuiSidebar";
-import SimilarArticles from "@/components/SimilarArticles";
 import { Article } from "@/types/Article";
 import { validateImageUrl } from "@/utils/apiUtils";
 import { formatDateTime } from "@/utils/dateUtils";
-import { ArrowBack, CalendarToday, Label, OpenInNew } from "@mui/icons-material";
+import {
+  ArrowBack,
+  CalendarToday,
+  Label,
+  OpenInNew,
+} from "@mui/icons-material";
 import {
   Box,
   Button,
@@ -19,13 +23,20 @@ import {
   Typography,
 } from "@mui/material";
 import { useRouter } from "next/navigation";
+import { ReactNode } from "react";
 
 interface ArticleContentProps {
   article: Article;
   lang: string;
+  // ✅ SimilarArticles（Server Component）を親(page.tsx)側で生成して受け取る
+  children?: ReactNode;
 }
 
-export default function ArticleContent({ article, lang }: ArticleContentProps) {
+export default function ArticleContent({
+  article,
+  lang,
+  children,
+}: ArticleContentProps) {
   const router = useRouter();
 
   return (
@@ -187,12 +198,8 @@ export default function ArticleContent({ article, lang }: ArticleContentProps) {
             )}
           </Paper>
 
-          {/* 類似記事 */}
-          <Box sx={{ mt: 6 }}>
-            {article.categories && article.categories.length > 0 && (
-              <SimilarArticles category={article.categories[0]} limit={3} />
-            )}
-          </Box>
+          {/* 類似記事（page.tsxからServer Componentとして渡される） */}
+          <Box sx={{ mt: 6 }}>{children}</Box>
         </Grid>
 
         {/* サイドバー */}
@@ -207,6 +214,7 @@ export default function ArticleContent({ article, lang }: ArticleContentProps) {
           >
             <MuiSidebar
               category={article.categories?.[0] || "general"}
+              categories={article.categories} // ✅ 追加
               articleTitle={article.title}
             />
           </Box>

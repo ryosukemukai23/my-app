@@ -6,13 +6,8 @@ import {
   SportsDBResponse,
   SportsDBTeam,
 } from "@/types/SportsDBEvent";
-import {
-  canMakeRequest,
-  getCachedData,
-  incrementRequestCount,
-  setCachedData,
-} from "@/utils/cacheUtils";
-import {useEffect, useState} from "react";
+import { getCachedData, setCachedData } from "@/utils/cacheUtils";
+import { useEffect, useState } from "react";
 
 // API key
 const SPORTSDB_API_KEY = "3"; // 無料版のキー
@@ -20,37 +15,39 @@ const SPORTSDB_API_BASE_URL = `https://www.thesportsdb.com/api/v1/json/${SPORTSD
 
 // 主要サッカーリーグID
 const MAJOR_SOCCER_LEAGUES = {
-  premierLeague: "4328",      // プレミアリーグ
-  laLiga: "4335",             // ラ・リーガ
-  bundesliga: "4331",         // ブンデスリーガ
-  serieA: "4332",             // セリエA
-  ligue1: "4334",             // リーグ・アン
+  premierLeague: "4328",
+  laLiga: "4335",
+  bundesliga: "4331",
+  serieA: "4332",
+  ligue1: "4334",
 };
 
 // 次のイベント取得（リーグID指定） - メイン機能
-export const useSportsDBNextEvents = (leagueId: string = MAJOR_SOCCER_LEAGUES.premierLeague) => {
+// ⚠️ `enabled` を追加。以前はこのフックが呼ばれると常にfetchしてしまい、
+//   結果として useSportsDBAPI 経由で「スポーツカテゴリでないページ」
+//   でも毎回 thesportsdb.com にリクエストが飛んでいた。
+export const useSportsDBNextEvents = (
+  leagueId: string = MAJOR_SOCCER_LEAGUES.premierLeague,
+  enabled: boolean = true,
+) => {
   const [events, setEvents] = useState<SportsDBEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+
     const fetchNextEvents = async () => {
-      // キャッシュキーを生成
       const cacheKey = `sportsdb_next_${leagueId}`;
 
-      // キャッシュを確認
       const cached = getCachedData<SportsDBEvent[]>(cacheKey);
       if (cached && cached.length > 0) {
         console.log("✅ Using cached next events data");
         setEvents(cached);
-        setLoading(false);
-        return;
-      }
-
-      // リクエスト制限をチェック
-      if (!canMakeRequest()) {
-        console.warn("⚠️ Daily API limit reached. Using cached data only.");
-        setError("API limit reached");
         setLoading(false);
         return;
       }
@@ -68,22 +65,19 @@ export const useSportsDBNextEvents = (leagueId: string = MAJOR_SOCCER_LEAGUES.pr
           throw new Error(`API Error: ${response.status}`);
         }
 
-        incrementRequestCount();
-
         const data: SportsDBResponse = await response.json();
         const events = data.events || [];
 
         console.log("✅ Next events received:", events.length, "events");
         setEvents(events);
 
-        // キャッシュに保存（データがある場合のみ）
         if (events.length > 0) {
           setCachedData(cacheKey, events);
         }
       } catch (err) {
         console.error("❌ Failed to fetch next events:", err);
         setError(
-          err instanceof Error ? err.message : "Failed to fetch next events"
+          err instanceof Error ? err.message : "Failed to fetch next events",
         );
         setEvents([]);
       } finally {
@@ -92,9 +86,9 @@ export const useSportsDBNextEvents = (leagueId: string = MAJOR_SOCCER_LEAGUES.pr
     };
 
     fetchNextEvents();
-  }, [leagueId]);
+  }, [leagueId, enabled]);
 
-  return {events, loading, error};
+  return { events, loading, error };
 };
 
 // 過去のイベント取得（リーグID + シーズン指定）
@@ -121,13 +115,6 @@ export const useSportsDBPastEvents = (leagueId: string, season: string) => {
         return;
       }
 
-      if (!canMakeRequest()) {
-        console.warn("⚠️ Daily API limit reached.");
-        setError("API limit reached");
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       setError(null);
 
@@ -141,13 +128,13 @@ export const useSportsDBPastEvents = (leagueId: string, season: string) => {
           throw new Error(`API Error: ${response.status}`);
         }
 
-        incrementRequestCount();
-
         const data: SportsDBResponse = await response.json();
-        const events = (data.events || []).filter(e => e.intHomeScore && e.intAwayScore);
+        const events = (data.events || []).filter(
+          (e) => e.intHomeScore && e.intAwayScore,
+        );
 
         console.log("✅ Past events received:", events.length, "events");
-        setEvents(events.slice(0, 15)); // 最新15件
+        setEvents(events.slice(0, 15));
 
         if (events.length > 0) {
           setCachedData(cacheKey, events.slice(0, 15));
@@ -155,7 +142,7 @@ export const useSportsDBPastEvents = (leagueId: string, season: string) => {
       } catch (err) {
         console.error("❌ Failed to fetch past events:", err);
         setError(
-          err instanceof Error ? err.message : "Failed to fetch past events"
+          err instanceof Error ? err.message : "Failed to fetch past events",
         );
         setEvents([]);
       } finally {
@@ -166,7 +153,7 @@ export const useSportsDBPastEvents = (leagueId: string, season: string) => {
     fetchPastEvents();
   }, [leagueId, season]);
 
-  return {events, loading, error};
+  return { events, loading, error };
 };
 
 // キーワードでイベント検索（オプション機能）
@@ -193,13 +180,6 @@ export const useSportsDBEventSearch = (keyword: string) => {
         return;
       }
 
-      if (!canMakeRequest()) {
-        console.warn("⚠️ Daily API limit reached.");
-        setError("API limit reached");
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       setError(null);
 
@@ -212,8 +192,6 @@ export const useSportsDBEventSearch = (keyword: string) => {
         if (!response.ok) {
           throw new Error(`API Error: ${response.status}`);
         }
-
-        incrementRequestCount();
 
         const data: SportsDBResponse = await response.json();
         const events = data.events || [];
@@ -236,7 +214,7 @@ export const useSportsDBEventSearch = (keyword: string) => {
     fetchEvents();
   }, [keyword]);
 
-  return {events, loading, error};
+  return { events, loading, error };
 };
 
 // チーム検索
@@ -263,13 +241,6 @@ export const useSportsDBTeamSearch = (teamName: string) => {
         return;
       }
 
-      if (!canMakeRequest()) {
-        console.warn("⚠️ Daily API limit reached.");
-        setError("API limit reached");
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       setError(null);
 
@@ -282,8 +253,6 @@ export const useSportsDBTeamSearch = (teamName: string) => {
         if (!response.ok) {
           throw new Error(`API Error: ${response.status}`);
         }
-
-        incrementRequestCount();
 
         const data: SportsDBResponse = await response.json();
         const teams = data.teams || [];
@@ -306,25 +275,34 @@ export const useSportsDBTeamSearch = (teamName: string) => {
     fetchTeams();
   }, [teamName]);
 
-  return {teams, loading, error};
+  return { teams, loading, error };
 };
 
-// 統合スポーツ情報フック - デフォルトで次の試合を表示
-export const useSportsDBAPI = (keyword?: string) => {
-  // デフォルトでプレミアリーグの次の試合を取得
-  const nextEvents = useSportsDBNextEvents(MAJOR_SOCCER_LEAGUES.premierLeague);
-  
-  // キーワードが指定されている場合は検索も実行
-  const searchEvents = useSportsDBEventSearch(keyword || "");
+// 統合スポーツ情報フック
+// ⚠️ `enabled` パラメータを追加。呼び出し側（MuiSidebar.tsx）で
+//   スポーツカテゴリの時だけ true を渡すことで、他カテゴリでの
+//   無駄なthesportsdb.comへのリクエストを止める。
+//   MuiSidebar.tsx側の呼び出しを
+//     useSportsDBAPI(shouldShowSports ? sportsKeyword : "")
+//   から
+//     useSportsDBAPI(sportsKeyword, shouldShowSports)
+//   に変更してください。
+export const useSportsDBAPI = (keyword?: string, enabled: boolean = true) => {
+  const nextEvents = useSportsDBNextEvents(
+    MAJOR_SOCCER_LEAGUES.premierLeague,
+    enabled && !keyword,
+  );
 
-  // 検索結果がある場合はそれを優先、なければ次の試合
-  const events = searchEvents.events.length > 0 ? searchEvents.events : nextEvents.events;
+  const searchEvents = useSportsDBEventSearch(enabled ? keyword || "" : "");
+
+  const events =
+    searchEvents.events.length > 0 ? searchEvents.events : nextEvents.events;
   const loading = keyword ? searchEvents.loading : nextEvents.loading;
   const error = keyword ? searchEvents.error : nextEvents.error;
 
   return {
-    events,
-    loading,
-    error,
+    events: enabled ? events : [],
+    loading: enabled ? loading : false,
+    error: enabled ? error : null,
   };
 };

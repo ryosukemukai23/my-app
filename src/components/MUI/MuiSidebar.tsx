@@ -1,13 +1,12 @@
 "use client";
 
-import {useLanguage} from "@/hooks/useLanguage";
+import { useLanguage } from "@/hooks/useLanguage";
 import useRakutenAPI from "@/hooks/useRakutenAPI";
-import {useSportsDBAPI} from "@/hooks/useSportsDBAPI";
-import {useSpotifySearch} from "@/hooks/useSpotifyAPI";
-import {useGeolocation, useWeatherAPI} from "@/hooks/useWeatherAPI";
-import {validateImageUrl} from "@/utils/apiUtils";
-import {formatDateShort} from "@/utils/dateUtils";
-import {Search, SportsBasketball} from "@mui/icons-material";
+import { useSportsDBAPI } from "@/hooks/useSportsDBAPI";
+import { useGeolocation, useWeatherAPI } from "@/hooks/useWeatherAPI";
+import { validateImageUrl } from "@/utils/apiUtils";
+import { formatDateShort } from "@/utils/dateUtils";
+import { Search, SportsBasketball } from "@mui/icons-material";
 import {
   Avatar,
   Box,
@@ -24,7 +23,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import React, {useMemo, useState} from "react";
+import React, { useMemo, useState } from "react";
+import { useItunesSearch } from "../../hooks/useItunesAPI";
 import WeatherIcon3D from "../3D/WeatherIcon3D";
 import LoadingSpinner from "../LoadingSpinner";
 
@@ -37,35 +37,46 @@ const formatLocalTime = (timestamp: number, timezoneOffset: number) => {
 
 interface MuiSidebarProps {
   category?: string;
+  categories?: string[]; // ✅ 記事ページからは配列全体を渡す
   articleKeyword?: string;
   articleTitle?: string;
-  searchQuery?: string; // ✅ 追加
+  searchQuery?: string;
 }
 
 const MuiSidebar: React.FC<MuiSidebarProps> = ({
   category = "general",
+  categories,
   articleKeyword = "",
   articleTitle = "",
-  searchQuery = "", // ✅ 追加
+  searchQuery = "",
 }) => {
-  const {t} = useLanguage();
+  const { t } = useLanguage();
   const [searchCity, setSearchCity] = useState("");
   const [cityQuery, setCityQuery] = useState("");
 
-  const {location} = useGeolocation();
-  const {current, loading: weatherLoading} = useWeatherAPI(
+  const { location } = useGeolocation();
+  const { current, loading: weatherLoading } = useWeatherAPI(
     cityQuery ? undefined : location,
-    cityQuery
+    cityQuery,
   );
+
+  // ✅ 配列が渡されていればそちらを優先、なければ単一categoryを配列化して統一的に扱う
+  const categoryList = useMemo(
+    () => (categories && categories.length > 0 ? categories : [category]),
+    [categories, category],
+  );
+
+  // ✅ 公式カテゴリ（entertainment / sports）のみで判定。
+  //   "エンタメ"/"music"/"スポーツ"はNewsData.ioが返さない値なので削除。
+  const shouldShowSpotify = categoryList.includes("entertainment");
+  const shouldShowSports = categoryList.includes("sports");
 
   // ✅ 商品検索キーワード（検索クエリを最優先）
   const productKeyword = useMemo(() => {
-    // 1. 検索クエリがあれば最優先
     if (searchQuery) {
       return searchQuery;
     }
 
-    // 2. 記事タイトルから抽出
     if (articleTitle) {
       const cleaned = articleTitle
         .replace(/[「」『』【】\[\]()（）]/g, " ")
@@ -90,23 +101,47 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
     error: rakutenError,
   } = useRakutenAPI({
     keyword: productKeyword,
-    newsCategory: productKeyword ? undefined : category,
+    newsCategory: productKeyword ? undefined : categoryList[0],
     hits: 5,
     autoFetch: true,
   });
 
-  // Spotify
-  const shouldShowSpotify =
-    category === "entertainment" ||
-    category === "エンタメ" ||
-    category === "music";
-  const {tracks, loading: spotifyLoading} = useSpotifySearch(
-    shouldShowSpotify ? articleKeyword || productKeyword || "popular" : "",
-    5
-  );
+  // ============================================================
+  // 音楽検索
+  // ============================================================
+
+  /**
+   * iTunes検索用キーワードを作る。
+   *
+   * 記事タイトル（またはarticleKeyword）をそのまま整形して検索語にする。
+   * ヒットしない場合やキーワードが無い場合は、route.ts側が
+   * アクセス国の最新チャートにフォールバックする。
+   */
+  const musicKeyword = useMemo(() => {
+    const targetText = articleKeyword?.trim() || articleTitle?.trim() || "";
+
+    if (!targetText) {
+      return "";
+    }
+
+    return targetText
+      .normalize("NFKC")
+      .replace(/[「」『』【】［］\[\]（）()]/g, " ")
+      .replace(/[、。,.!！?？:：;；]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }, [articleKeyword, articleTitle]);
+
+  // 常時表示。キーワードが空でもroute.ts側がチャートを返すので出し分け不要。
+  const shouldShowMusic = true;
+
+  const {
+    tracks,
+    source: musicSource,
+    loading: musicLoading,
+  } = useItunesSearch(musicKeyword, 5);
 
   // スポーツ
-  const shouldShowSports = category === "sports" || category === "スポーツ";
   const sportsKeyword = useMemo(() => {
     if (articleTitle) {
       return articleTitle.split(/\s+/)[0] || "soccer";
@@ -128,14 +163,16 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
   };
 
   return (
-    <Box sx={{display: "flex", flexDirection: "column", gap: 3, width: "100%"}}>
+    <Box
+      sx={{ display: "flex", flexDirection: "column", gap: 3, width: "100%" }}
+    >
       {/* 天気 */}
       <Card elevation={2}>
         <CardContent>
           <Typography variant="h6" gutterBottom fontWeight={700}>
             {t("sidebar.weather")}
           </Typography>
-          <Box component="form" onSubmit={handleWeatherSearch} sx={{mb: 2}}>
+          <Box component="form" onSubmit={handleWeatherSearch} sx={{ mb: 2 }}>
             <TextField
               fullWidth
               size="small"
@@ -159,7 +196,7 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
                 direction="row"
                 spacing={2}
                 alignItems="center"
-                sx={{mb: 2}}
+                sx={{ mb: 2 }}
               >
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -187,21 +224,20 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
       {/* 楽天 */}
       <Card elevation={2}>
         <CardContent>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{mb: 2}}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
             <img
               src="https://r.r10s.jp/com/img/home/smart/top/app/app_andr_68x68.png"
               alt="Rakuten Logo"
               width={40}
               height={40}
-              style={{display: "block"}}
+              style={{ display: "block" }}
             />
             <Typography variant="h6" fontWeight={700}>
-              {/* ✅ 検索クエリがある場合は「検索結果の関連商品」 */}
               {searchQuery
                 ? `「${searchQuery}」の関連商品`
                 : articleTitle
-                ? "関連商品"
-                : t("sidebar.products")}
+                  ? "関連商品"
+                  : t("sidebar.products")}
             </Typography>
           </Stack>
           {rakutenLoading ? (
@@ -220,7 +256,7 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
                     href={product.affiliateUrl || product.itemUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    sx={{px: 0, "&:hover": {bgcolor: "action.hover"}}}
+                    sx={{ px: 0, "&:hover": { bgcolor: "action.hover" } }}
                   >
                     <ListItemAvatar>
                       <Avatar
@@ -263,47 +299,65 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
         </CardContent>
       </Card>
 
-      {/* Spotify */}
-      {shouldShowSpotify && (
+      {/* iTunes */}
+      {shouldShowMusic && (
         <Card elevation={2}>
           <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{mb: 2}}>
-              <Box sx={{p: 1, bgcolor: "transparent", borderRadius: 1}}>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              sx={{ mb: 2 }}
+            >
+              <Box
+                sx={{
+                  p: 1,
+                  bgcolor: "transparent",
+                  borderRadius: 1,
+                }}
+              >
                 <img
-                  src="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green.png"
-                  alt="Spotify Logo"
+                  src="https://upload.wikimedia.org/wikipedia/commons/5/5f/Apple_Music_icon.svg"
+                  alt="Apple Music Logo"
                   width={40}
                   height={40}
-                  style={{display: "block"}}
+                  style={{ display: "block" }}
                 />
               </Box>
+
               <Typography variant="h6" fontWeight={700}>
-                {t("sidebar.music")}
+                {musicSource === "chart" ? "人気の楽曲" : t("sidebar.music")}
               </Typography>
             </Stack>
-            {spotifyLoading ? (
+
+            {musicLoading ? (
               <LoadingSpinner />
             ) : tracks.length > 0 ? (
               <List disablePadding>
                 {tracks.map((track, index) => (
-                  <React.Fragment key={track.id}>
+                  <React.Fragment key={track.trackId}>
                     {index > 0 && <Divider />}
+
                     <ListItem
                       component="a"
-                      href={track.external_urls.spotify}
+                      href={track.trackViewUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       sx={{
                         px: 0,
                         py: 1.5,
-                        "&:hover": {bgcolor: "action.hover"},
+                        "&:hover": {
+                          bgcolor: "action.hover",
+                        },
                       }}
                     >
                       <ListItemAvatar>
                         <Avatar
                           variant="rounded"
-                          src={validateImageUrl(track.album.images[0]?.url)}
-                          alt={track.name}
+                          src={validateImageUrl(
+                            track.artworkUrl100.replace("100x100", "600x600"),
+                          )}
+                          alt={track.trackName}
                           sx={{
                             width: 56,
                             height: 56,
@@ -312,6 +366,7 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
                           }}
                         />
                       </ListItemAvatar>
+
                       <ListItemText
                         primary={
                           <Typography
@@ -324,7 +379,7 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
                               overflow: "hidden",
                             }}
                           >
-                            {track.name}
+                            {track.trackName}
                           </Typography>
                         }
                         secondary={
@@ -338,7 +393,7 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
                               overflow: "hidden",
                             }}
                           >
-                            {track.artists.map((a) => a.name).join(", ")}
+                            {track.artistName}
                           </Typography>
                         }
                       />
@@ -348,7 +403,7 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
               </List>
             ) : (
               <Typography variant="body2" color="text.secondary">
-                {t("common.noData")}
+                関連する楽曲が見つかりませんでした
               </Typography>
             )}
           </CardContent>
@@ -359,9 +414,14 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
       {shouldShowSports && (
         <Card elevation={2}>
           <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{mb: 2}}>
-              <Box sx={{p: 1, bgcolor: "warning.main", borderRadius: 1}}>
-                <SportsBasketball sx={{color: "white", fontSize: 20}} />
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              sx={{ mb: 2 }}
+            >
+              <Box sx={{ p: 1, bgcolor: "warning.main", borderRadius: 1 }}>
+                <SportsBasketball sx={{ color: "white", fontSize: 20 }} />
               </Box>
               <Typography variant="h6" fontWeight={700}>
                 スポーツ
@@ -382,7 +442,7 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
                       pb: 2,
                       borderBottom: 1,
                       borderColor: "divider",
-                      "&:last-child": {borderBottom: 0},
+                      "&:last-child": { borderBottom: 0 },
                     }}
                   >
                     <Typography variant="body2" fontWeight={600} gutterBottom>
@@ -400,7 +460,7 @@ const MuiSidebar: React.FC<MuiSidebarProps> = ({
                         label={`${event.intHomeScore} - ${event.intAwayScore}`}
                         size="small"
                         color="primary"
-                        sx={{mt: 0.5}}
+                        sx={{ mt: 0.5 }}
                       />
                     )}
                   </Box>

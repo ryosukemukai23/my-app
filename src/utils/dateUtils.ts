@@ -30,7 +30,7 @@ export const formatDate = (isoDate: string, locale: string = "ja"): string => {
  */
 export const formatDateShort = (
   isoDate: string,
-  locale: string = "ja"
+  locale: string = "ja",
 ): string => {
   const date = new Date(isoDate);
 
@@ -55,7 +55,7 @@ export const formatDateShort = (
  */
 export const formatDateTime = (
   isoDate: string,
-  locale: string = "ja"
+  locale: string = "ja",
 ): string => {
   const date = new Date(isoDate);
 
@@ -82,7 +82,7 @@ export const formatDateTime = (
  */
 export const getRelativeTime = (
   isoDate: string,
-  locale: string = "ja"
+  locale: string = "ja",
 ): string => {
   const date = new Date(isoDate);
   const now = new Date();
@@ -120,7 +120,7 @@ export const getRelativeTime = (
  */
 export const formatUnixTimestamp = (
   timestamp: number,
-  locale: string = "ja"
+  locale: string = "ja",
 ): string => {
   const date = new Date(timestamp * 1000);
 
@@ -139,7 +139,7 @@ export const formatUnixTimestamp = (
  */
 export const getDayOfWeek = (
   isoDate: string,
-  locale: string = "ja"
+  locale: string = "ja",
 ): string => {
   const date = new Date(isoDate);
 

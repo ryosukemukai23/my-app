@@ -2,12 +2,7 @@
 "use client";
 
 import { RakutenAPIResponse, RakutenProduct } from "@/types/RakutenProduct";
-import {
-  canMakeRequest,
-  getCachedData,
-  incrementRequestCount,
-  setCachedData,
-} from "@/utils/cacheUtils";
+import { getCachedData, setCachedData } from "@/utils/cacheUtils";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface UseRakutenAPIParams {
@@ -22,7 +17,6 @@ interface UseRakutenAPIParams {
 // ✅ ニュースカテゴリーから楽天検索キーワードを生成（純粋関数として外部に定義）
 const getKeywordFromNewsCategory = (category: string): string => {
   const categoryKeywordMap: Record<string, string> = {
-    // 英語カテゴリー
     general: "人気",
     business: "ビジネス書",
     tech: "ガジェット",
@@ -45,7 +39,6 @@ const getKeywordFromNewsCategory = (category: string): string => {
     crime: "防犯",
     weather: "アウトドア",
 
-    // 日本語カテゴリー
     一般: "人気",
     ビジネス: "ビジネス書",
     テクノロジー: "ガジェット",
@@ -69,7 +62,6 @@ export default function useRakutenAPI({
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState<number>(0);
 
-  // ✅ useMemoで最終キーワードを計算（再計算を最小化）
   const finalKeyword = useMemo(() => {
     if (keyword) return keyword;
     if (newsCategory) return getKeywordFromNewsCategory(newsCategory);
@@ -77,7 +69,6 @@ export default function useRakutenAPI({
   }, [keyword, newsCategory]);
 
   const fetchProducts = useCallback(async () => {
-    // キーワードまたはジャンルIDがない場合はスキップ
     if (!finalKeyword && !genreId) {
       console.log("⏸️ No keyword or genreId provided, skipping fetch");
       setProducts([]);
@@ -85,10 +76,8 @@ export default function useRakutenAPI({
       return;
     }
 
-    // キャッシュキーを生成
     const cacheKey = `rakuten_${finalKeyword}_${genreId}_${hits}_${page}`;
 
-    // キャッシュを確認
     const cached = getCachedData<{
       products: RakutenProduct[];
       totalCount: number;
@@ -102,20 +91,16 @@ export default function useRakutenAPI({
       return;
     }
 
-    // リクエスト制限をチェック
-    if (!canMakeRequest()) {
-      console.warn("⚠️ Daily API limit reached. Using cached data only.");
-      setError("API limit reached");
-      setLoading(false);
-      return;
-    }
+    // ⚠️ 以前ここに他の無関係なAPI（Spotify/Weather/SportsDB）と共有の
+    //   canMakeRequest()ゲートがあった。実際のレート制御は
+    //   app/api/rakuten/search/route.ts 側のスロットリング(1.1秒間隔)＋
+    //   1時間の共有キャッシュ(revalidate: 3600)で既に行われているため、
+    //   このクライアント側の重複した・無関係な制限は撤去した。
 
     setLoading(true);
     setError(null);
 
     try {
-      // ✅ applicationId/affiliateIdはサーバー側(API Route)で付与するので
-      //    クライアント側のパラメータからは除外
       const params = new URLSearchParams({
         hits: hits.toString(),
         page: page.toString(),
@@ -137,23 +122,18 @@ export default function useRakutenAPI({
         page,
       });
 
-      // ✅ 楽天APIへ直接ではなく、自前のAPI Route経由で取得
       const response = await fetch(`/api/rakuten/search?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
       }
 
-      incrementRequestCount();
-
       const data: RakutenAPIResponse = await response.json();
 
-      // レスポンスデータの検証
       if (!data.Items || !Array.isArray(data.Items)) {
         throw new Error("Invalid API response format");
       }
 
-      // 商品データを抽出
       const productList: RakutenProduct[] = data.Items.map((item, index) => ({
         rank: (page - 1) * hits + index + 1,
         itemName: item.Item.itemName,
@@ -189,8 +169,6 @@ export default function useRakutenAPI({
 
       setProducts(productList);
       setTotalCount(totalCount);
-
-      // キャッシュに保存
       setCachedData(cacheKey, { products: productList, totalCount });
     } catch (err) {
       console.error("❌ Rakuten API error:", err);

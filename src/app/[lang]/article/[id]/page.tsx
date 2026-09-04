@@ -1,6 +1,7 @@
 // app/[lang]/article/[id]/page.tsx
 import ArticleContent from "@/components/ArticleContent";
-import { fetchArticleByIdServer, fetchNewsServer } from "@/utils/serverNewsAPI";
+import SimilarArticles from "@/components/SimilarArticles";
+import { fetchArticleByIdServer } from "@/utils/serverNewsAPI";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -43,19 +44,16 @@ export async function generateMetadata({
   };
 }
 
-// ✅ 静的パス生成（人気記事を事前生成）
+// ✅ ビルド時の事前生成をゼロにする
+// ⚠️ 無料プラン1日100リクエスト枠に対し、以前は記事50件を事前生成しており
+//   （一覧取得1回＋記事詳細フェッチ最大50回＝1デプロイで最大51回消費）、
+//   デプロイ2回で枠が枯渇していた。
+//   generateStaticParamsが[]を返しても、Next.jsのdynamicParamsは
+//   デフォルトでtrueのため404にはならず、未生成の記事は初回アクセス時に
+//   その場で生成される。以後はrevalidate(86400)でキャッシュされるため、
+//   2人目以降の訪問者への追加フェッチは発生しない。
 export async function generateStaticParams() {
-  try {
-    // 最新記事50件を事前生成
-    const { articles } = await fetchNewsServer({ limit: 50 });
-
-    return articles.map((article) => ({
-      id: article.uuid,
-    }));
-  } catch (error) {
-    console.error("Error generating static params:", error);
-    return [];
-  }
+  return [];
 }
 
 // ✅ サーバーコンポーネント
@@ -69,8 +67,20 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     notFound();
   }
 
+  // ✅ SimilarArticles（async Server Component）はここ（Serverコンポーネント）で生成し、
+  //   children としてClient Componentへ渡す。Client Component内でasync Server
+  //   Componentを直接importして描画することはできないため。
+  const similarArticlesSlot =
+    article.categories && article.categories.length > 0 ? (
+      <SimilarArticles category={article.categories[0]} limit={3} lang={lang} />
+    ) : null;
+
   // クライアントコンポーネントに記事データを渡す
-  return <ArticleContent article={article} lang={lang} />;
+  return (
+    <ArticleContent article={article} lang={lang}>
+      {similarArticlesSlot}
+    </ArticleContent>
+  );
 }
 
 // ✅ 動的レンダリング設定

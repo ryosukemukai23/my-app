@@ -1,47 +1,40 @@
 // components/MUI/MuiPagination.tsx
 "use client";
 
-import {Pagination, Stack} from "@mui/material";
+import { Button, Stack, CircularProgress } from "@mui/material";
+import { ArrowForward } from "@mui/icons-material";
 import React from "react";
 
 interface MuiPaginationProps {
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
+  hasNextPage: boolean;
+  isLoading?: boolean;
+  onNext: () => void;
+  lang?: string;
 }
 
 const MuiPagination: React.FC<MuiPaginationProps> = ({
-  currentPage,
-  totalPages,
-  onPageChange,
+  hasNextPage,
+  isLoading = false,
+  onNext,
+  lang = "ja",
 }) => {
-  const handleChange = (event: React.ChangeEvent<unknown>, page: number) => {
-    onPageChange(page);
-  };
-
-  if (totalPages <= 1) {
+  // ✅ nextPageトークンがなければ「次へ」ボタン自体を表示しない
+  if (!hasNextPage) {
     return null;
   }
 
   return (
-    <Stack spacing={2} alignItems="center" sx={{mt: 4}}>
-      <Pagination
-        count={totalPages}
-        page={currentPage}
-        onChange={handleChange}
-        color="primary"
+    <Stack spacing={2} alignItems="center" sx={{ mt: 4 }}>
+      <Button
+        variant="outlined"
         size="large"
-        showFirstButton
-        showLastButton
-        sx={{
-          "& .MuiPaginationItem-root": {
-            fontWeight: 500,
-          },
-          "& .Mui-selected": {
-            fontWeight: 700,
-          },
-        }}
-      />
+        onClick={onNext}
+        disabled={isLoading}
+        endIcon={isLoading ? <CircularProgress size={18} /> : <ArrowForward />}
+        sx={{ fontWeight: 600, minWidth: 160 }}
+      >
+        {lang === "ja" ? "次へ" : "Next"}
+      </Button>
     </Stack>
   );
 };

@@ -1,14 +1,14 @@
 // contexts/LanguageContext.tsx
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import React, {
   createContext,
-  useContext,
-  useState,
-  useEffect,
   ReactNode,
+  useContext,
+  useEffect,
+  useState,
 } from "react";
-import {useRouter, usePathname} from "next/navigation";
 
 type Language = "ja" | "en";
 
@@ -19,7 +19,7 @@ interface LanguageContextType {
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(
-  undefined
+  undefined,
 );
 
 export const useLanguageContext = () => {
@@ -54,7 +54,7 @@ const translations: Record<Language, Record<string, string>> = {
     "category.tech": "テクノロジー",
     "category.politics": "政治",
     "category.food": "食",
-    "category.travel": "旅行",
+    "category.tourism": "旅行", // ✅ travel → tourism
 
     // サイドバー
     "sidebar.weather": "天気",
@@ -97,7 +97,7 @@ const translations: Record<Language, Record<string, string>> = {
     "category.tech": "Technology",
     "category.politics": "Politics",
     "category.food": "Food",
-    "category.travel": "Travel",
+    "category.tourism": "Travel", // ✅ travel → tourism
 
     // Sidebar
     "sidebar.weather": "Weather",
@@ -130,14 +130,11 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
   initialLanguage = "ja",
 }) => {
   const [language, setLanguageState] = useState<Language>(initialLanguage);
-  const [mounted, setMounted] = useState<boolean>(false);
   const router = useRouter();
   const pathname = usePathname();
 
   // 初回マウント時にCookieから読み込み
   useEffect(() => {
-    setMounted(true);
-
     const savedLang = document.cookie
       .split("; ")
       .find((row) => row.startsWith("language="))
@@ -160,17 +157,14 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
     }
   };
 
-  // 翻訳関数
+  // 翻訳関数（存在しないキーや未初期化時も安全にガード）
   const t = (key: string): string => {
-    return translations[language][key] || key;
+    const langDict = translations[language] || translations.ja;
+    return langDict[key] || key;
   };
 
-  if (!mounted) {
-    return null;
-  }
-
   return (
-    <LanguageContext.Provider value={{language, setLanguage, t}}>
+    <LanguageContext.Provider value={{ language, setLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );

@@ -6,15 +6,15 @@ import MuiPagination from "@/components/MUI/MuiPagination";
 import MuiSidebar from "@/components/MUI/MuiSidebar";
 import RecommendationCard from "@/components/RecommendationCard";
 import { Article } from "@/types/Article";
-import { Alert, Box, Container, Grid } from "@mui/material"; // ← ここ重要！
+import { Alert, Box, Container, Grid } from "@mui/material";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface CategoryContentProps {
   articles: Article[];
   category: string;
   lang: string;
-  currentPage: number;
-  totalPages: number;
+  nextPageToken: string | null;
   searchQuery: string;
 }
 
@@ -22,21 +22,24 @@ export default function CategoryContent({
   articles,
   category,
   lang,
-  currentPage,
-  totalPages,
+  nextPageToken,
   searchQuery,
 }: CategoryContentProps) {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
 
-  // ページ変更
-  const handlePageChange = (page: number) => {
+  // ✅ 「次へ」：現在のnextPageTokenをそのままcursorとしてURLに積む
+  const handleNext = () => {
+    if (!nextPageToken) return;
+
+    setIsLoading(true);
+
     const params = new URLSearchParams();
     if (searchQuery) params.set("q", searchQuery);
-    if (page > 1) params.set("page", page.toString());
-    
-    const queryString = params.toString();
-    router.push(`/${lang}/${category}${queryString ? `?${queryString}` : ""}`);
-    
+    params.set("cursor", nextPageToken);
+
+    router.push(`/${lang}/${category}?${params.toString()}`);
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -59,7 +62,9 @@ export default function CategoryContent({
           {/* 記事一覧 */}
           {articles.length > 0 ? (
             <>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 3, mb: 4 }}>
+              <Box
+                sx={{ display: "flex", flexDirection: "column", gap: 3, mb: 4 }}
+              >
                 {articles.map((article, index) => (
                   <Box key={`article-${article.uuid}-${index}`}>
                     <MuiArticleCard article={article} />
@@ -78,11 +83,12 @@ export default function CategoryContent({
                 ))}
               </Box>
 
-              {/* ページネーション */}
+              {/* ページネーション（「次へ」のみ） */}
               <MuiPagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
+                hasNextPage={!!nextPageToken}
+                isLoading={isLoading}
+                onNext={handleNext}
+                lang={lang}
               />
             </>
           ) : (
@@ -93,8 +99,8 @@ export default function CategoryContent({
                     ? `「${searchQuery}」の検索結果が見つかりませんでした`
                     : `No results found for "${searchQuery}"`
                   : lang === "ja"
-                  ? "記事が見つかりませんでした"
-                  : "No articles found"}
+                    ? "記事が見つかりませんでした"
+                    : "No articles found"}
               </Alert>
             </Box>
           )}
@@ -104,8 +110,10 @@ export default function CategoryContent({
         <Grid size={{ xs: 12, lg: 4 }}>
           <MuiSidebar
             category={category}
-            articleKeyword={articles[0]?.title || ""}
+            categories={[category]} // ✅ 前回のMuiSidebar変更に合わせる
             searchQuery={searchQuery}
+            // ✅ articleKeyword は渡さない。記事詳細ページ（ArticleContent.tsx）専用にする。
+            //   一覧ページでは productKeyword が空なら "popular" にフォールバックする。
           />
         </Grid>
       </Grid>

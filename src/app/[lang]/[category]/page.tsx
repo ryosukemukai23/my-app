@@ -10,7 +10,7 @@ interface CategoryPageProps {
   }>;
   searchParams: Promise<{
     q?: string;
-    page?: string;
+    cursor?: string; // ✅ ページ番号ではなく、NewsData.ioのnextPageトークンをそのまま保持
   }>;
 }
 
@@ -20,6 +20,7 @@ export async function generateMetadata({
 }: CategoryPageProps): Promise<Metadata> {
   const { lang, category } = await params;
 
+  // categoryNames
   const categoryNames: Record<string, Record<string, string>> = {
     ja: {
       top: "トップニュース",
@@ -29,6 +30,9 @@ export async function generateMetadata({
       entertainment: "エンタメ",
       science: "科学",
       health: "健康",
+      politics: "政治", // ✅ 追加
+      food: "グルメ", // ✅ 追加
+      tourism: "旅行", // ✅ 追加
     },
     en: {
       top: "Top News",
@@ -38,6 +42,9 @@ export async function generateMetadata({
       entertainment: "Entertainment",
       science: "Science",
       health: "Health",
+      politics: "Politics", // ✅ 追加
+      food: "Food", // ✅ 追加
+      tourism: "Travel", // ✅ 追加
     },
   };
 
@@ -53,9 +60,10 @@ export async function generateMetadata({
   };
 }
 
-// ✅ 静的パス生成
+// ✅ 静的パス生成（カテゴリ×言語の14件のみ。cursorはクエリパラメータなので対象外）
 export async function generateStaticParams() {
   const languages = ["ja", "en"];
+  // generateStaticParams
   const categories = [
     "top",
     "business",
@@ -64,8 +72,10 @@ export async function generateStaticParams() {
     "entertainment",
     "science",
     "health",
+    "politics", // ✅ 追加
+    "food", // ✅ 追加
+    "tourism", // ✅ 追加
   ];
-
   const params = [];
   for (const lang of languages) {
     for (const category of categories) {
@@ -82,27 +92,23 @@ export default async function CategoryPage({
   searchParams,
 }: CategoryPageProps) {
   const { lang, category } = await params;
-  const { q: searchQuery, page: pageParam } = await searchParams;
+  const { q: searchQuery, cursor } = await searchParams;
 
-  const currentPage = parseInt(pageParam || "1", 10);
-
-  // サーバー側でニュース取得
-  const { articles, totalPages } = await fetchNewsServer({
+  // ✅ NewsData.ioはページ番号ではなくnextPageトークン(cursor)方式
+  const { articles, nextPage } = await fetchNewsServer({
     category: category === "top" ? undefined : category,
     language: lang,
-    page: currentPage,
+    cursor,
     limit: 10,
     search: searchQuery || "",
   });
 
-  // クライアントコンポーネントにデータを渡す
   return (
     <CategoryContent
       articles={articles}
       category={category}
       lang={lang}
-      currentPage={currentPage}
-      totalPages={totalPages}
+      nextPageToken={nextPage}
       searchQuery={searchQuery || ""}
     />
   );
@@ -110,7 +116,5 @@ export default async function CategoryPage({
 
 // ✅ 再検証設定
 // serverNewsAPI.ts 側の fetch も revalidate: 86400 で統一。
-// Next.jsのルートセグメントrevalidateは「そのセグメント内fetchの上限」として
-// 働くため、ここが短いとfetch側の設定が無効化されてAPIを無駄打ちする。
-// 無料プランの1日100リクエスト枠を守るため、必ずfetch側と同じ値にすること。
-export const revalidate = 86400; // 24時間ごとに再生成（serverNewsAPI.tsと統一）
+// 無料プランの1日クレジット枠を守るため、必ずfetch側と同じ値にすること。
+export const revalidate = 86400;
