@@ -54,7 +54,7 @@ interface FetchNewsParams {
   category?: string;
   language?: string;
   cursor?: string;
-  page?: string; // ✅ page プロパティを追加
+  page?: string | number;
   limit?: number;
   search?: string;
 }
@@ -71,13 +71,13 @@ const normalizeArticle = (item: NewsDataArticle): Article => ({
   url: item.link,
 });
 
-// ✅ 一覧取得
+// 一覧取得
 export const fetchNewsServer = cache(
   async ({
     category = "top",
     language = "ja",
     cursor,
-    page, // ✅ page を取得
+    page,
     limit = FREE_PLAN_MAX_SIZE,
     search = "",
   }: FetchNewsParams = {}): Promise<{
@@ -92,17 +92,21 @@ export const fetchNewsServer = cache(
       });
 
       const mappedCategory = CATEGORY_MAP[category.toLowerCase()];
+
       if (mappedCategory) {
         params.append("category", mappedCategory);
       }
+
       if (search) {
         params.append("q", search);
       }
 
-      // ✅ page または cursor のどちらが指定されても 'page' パラメータとして追加
+      // page または cursor のどちらが指定されても
+      // NewsData.io の page パラメータとして追加
       const nextPageToken = page || cursor;
+
       if (nextPageToken) {
-        params.append("page", nextPageToken);
+        params.append("page", String(nextPageToken));
       }
 
       console.log("🔍 [Server] Fetching news (NewsData.io):", {
@@ -121,12 +125,17 @@ export const fetchNewsServer = cache(
 
       if (!response.ok) {
         const errorBody = await response.text();
+
         console.error(
           "❌ [Server] News list fetch error:",
           response.status,
           errorBody,
         );
-        return { articles: [], nextPage: null };
+
+        return {
+          articles: [],
+          nextPage: null,
+        };
       }
 
       const data: NewsDataResponse = await response.json();
@@ -136,23 +145,32 @@ export const fetchNewsServer = cache(
 
       console.log("✅ [Server] Fetched news:", articles.length, "articles");
 
-      return { articles, nextPage: data.nextPage || null };
+      return {
+        articles,
+        nextPage: data.nextPage || null,
+      };
     } catch (error) {
       console.error("❌ [Server] News API error:", error);
-      return { articles: [], nextPage: null };
+
+      return {
+        articles: [],
+        nextPage: null,
+      };
     }
   },
 );
 
-// ✅ 単一記事取得
+// 単一記事取得
 export const fetchArticleByIdServer = cache(
   async (
     articleId: string,
     language: string = "ja",
   ): Promise<Article | null> => {
     const cached = await getCachedArticle<Article>(articleId);
+
     if (cached) {
       console.log("✅ [Server] Article served from Redis cache:", articleId);
+
       return cached;
     }
 
@@ -176,6 +194,7 @@ export const fetchArticleByIdServer = cache(
 
       if (!response.ok) {
         const errorBody = await response.text();
+
         console.error(
           "❌ [Server] Article fetch error:",
           response.status,
@@ -183,6 +202,7 @@ export const fetchArticleByIdServer = cache(
           "for id:",
           articleId,
         );
+
         return null;
       }
 
@@ -194,10 +214,12 @@ export const fetchArticleByIdServer = cache(
           "❌ [Server] Article not found (expired from 48h window?):",
           articleId,
         );
+
         return null;
       }
 
       const article = normalizeArticle(found);
+
       await cacheArticle(article.uuid, article);
 
       console.log("✅ [Server] Found article via direct fetch:", article.title);
@@ -205,12 +227,13 @@ export const fetchArticleByIdServer = cache(
       return article;
     } catch (error) {
       console.error("❌ [Server] Error fetching article by id:", error);
+
       return null;
     }
   },
 );
 
-// ✅ 類似記事取得
+// 類似記事取得
 export const fetchSimilarArticlesServer = cache(
   async (
     category: string,
@@ -225,6 +248,7 @@ export const fetchSimilarArticlesServer = cache(
       });
 
       const mappedCategory = CATEGORY_MAP[category.toLowerCase()];
+
       if (mappedCategory) {
         params.append("category", mappedCategory);
       }
@@ -255,6 +279,7 @@ export const fetchSimilarArticlesServer = cache(
       return articles;
     } catch (error) {
       console.error("❌ [Server] Error fetching similar articles:", error);
+
       return [];
     }
   },
