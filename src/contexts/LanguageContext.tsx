@@ -1,14 +1,8 @@
 // contexts/LanguageContext.tsx
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
-import React, {
-  createContext,
-  ReactNode,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import {usePathname, useRouter} from "next/navigation";
+import React, {createContext, ReactNode, useContext, useEffect, useState} from "react";
 
 type Language = "ja" | "en";
 
@@ -18,9 +12,7 @@ interface LanguageContextType {
   t: (key: string) => string;
 }
 
-const LanguageContext = createContext<LanguageContextType | undefined>(
-  undefined,
-);
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const useLanguageContext = () => {
   const context = useContext(LanguageContext);
@@ -125,33 +117,55 @@ const translations: Record<Language, Record<string, string>> = {
   },
 };
 
-export const LanguageProvider: React.FC<LanguageProviderProps> = ({
-  children,
-  initialLanguage = "ja",
-}) => {
-  const [language, setLanguageState] = useState<Language>(initialLanguage);
+// URL の先頭が /ja または /en ならその言語を返す
+const detectLanguageFromPath = (pathname: string | null): Language | null => {
+  const match = pathname?.match(/^\/(ja|en)(?=\/|$)/);
+  return match ? (match[1] as Language) : null;
+};
+
+const saveLanguageCookie = (lang: Language) => {
+  document.cookie = `language=${lang}; path=/; max-age=${60 * 60 * 24 * 365}`; // 1年間保存
+};
+
+export const LanguageProvider: React.FC<LanguageProviderProps> = ({children, initialLanguage = "ja"}) => {
   const router = useRouter();
   const pathname = usePathname();
 
-  // 初回マウント時にCookieから読み込み
+  // URLにプレフィックスがないページ（/weather/JP など）用のフォールバック
+  const [fallbackLanguage, setFallbackLanguage] = useState<Language>(initialLanguage);
+
+  const pathLanguage = detectLanguageFromPath(pathname);
+
+  // ✅ URL優先。サーバーの初回HTMLから正しい言語で描画される
+  const language: Language = pathLanguage ?? fallbackLanguage;
+
+  // 初回マウント時にCookieから読み込み（プレフィックスなしページ用）
   useEffect(() => {
     const savedLang = document.cookie
       .split("; ")
       .find((row) => row.startsWith("language="))
       ?.split("=")[1] as Language;
 
-    if (savedLang && (savedLang === "ja" || savedLang === "en")) {
-      setLanguageState(savedLang);
+    if (savedLang === "ja" || savedLang === "en") {
+      setFallbackLanguage(savedLang);
     }
   }, []);
 
+  // URLの言語をCookieに同期（プレフィックスなしページでも直前の言語を引き継ぐ）
+  useEffect(() => {
+    if (pathLanguage) {
+      saveLanguageCookie(pathLanguage);
+      setFallbackLanguage(pathLanguage);
+    }
+  }, [pathLanguage]);
+
   // 言語変更時の処理
   const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    document.cookie = `language=${lang}; path=/; max-age=${60 * 60 * 24 * 365}`; // 1年間保存
+    setFallbackLanguage(lang);
+    saveLanguageCookie(lang);
 
-    // URLを変更（言語プレフィックスを更新）
-    if (pathname) {
+    // URLにプレフィックスがある場合だけ遷移（言語プレフィックスを更新）
+    if (pathname && pathLanguage && pathLanguage !== lang) {
       const newPath = pathname.replace(/^\/(ja|en)/, `/${lang}`);
       router.push(newPath);
     }
@@ -163,9 +177,6 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
     return langDict[key] || key;
   };
 
-  return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
-      {children}
-    </LanguageContext.Provider>
-  );
+  return <LanguageContext.Provider value={{language, setLanguage, t}}>{children}</LanguageContext.Provider>;
 };
+
