@@ -1,14 +1,17 @@
 // utils/serverNewsAPI.ts
-import { Article } from "@/types/Article";
-import { cacheArticle, getCachedArticle } from "@/utils/redisClient";
-import { cache } from "react";
+import {Article} from "@/types/Article";
+import {cache} from "react";
 
 const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY as string;
 const NEWSDATA_BASE_URL = "https://newsdata.io/api/1/latest";
-const PLACEHOLDER_IMAGE =
-  "https://placehold.jp/cccccc/ffffff/800x500.png?text=newsportal";
+const PLACEHOLDER_IMAGE = "https://placehold.jp/cccccc/ffffff/800x500.png?text=newsportal";
 
 const FREE_PLAN_MAX_SIZE = 10;
+
+// 一覧・類似記事のキャッシュ期間（秒）
+const LIST_REVALIDATE_SEC = 60 * 60; // 1時間
+// 記事詳細のキャッシュ期間（秒）。内容は変わらず、APIの取得可能期間も限られるので長めにする
+const ARTICLE_REVALIDATE_SEC = 60 * 60 * 24; // 24時間
 
 const CATEGORY_MAP: Record<string, string | undefined> = {
   top: undefined, // カテゴリ指定なし＝トップニュース扱い
@@ -117,21 +120,14 @@ export const fetchNewsServer = cache(
         search,
       });
 
-      const response = await fetch(
-        `${NEWSDATA_BASE_URL}?${params.toString()}`,
-        {
-          next: { revalidate: 3600 },
-        },
-      );
+      const response = await fetch(`${NEWSDATA_BASE_URL}?${params.toString()}`, {
+        next: {revalidate: LIST_REVALIDATE_SEC},
+      });
 
       if (!response.ok) {
         const errorBody = await response.text();
 
-        console.error(
-          "❌ [Server] News list fetch error:",
-          response.status,
-          errorBody,
-        );
+        console.error("❌ [Server] News list fetch error:", response.status, errorBody);
 
         return {
           articles: [],
@@ -141,8 +137,6 @@ export const fetchNewsServer = cache(
 
       const data: NewsDataResponse = await response.json();
       const articles = (data.results || []).map(normalizeArticle);
-
-      await Promise.all(articles.map((a) => cacheArticle(a.uuid, a)));
 
       console.log("✅ [Server] Fetched news:", articles.length, "articles");
 
@@ -163,46 +157,23 @@ export const fetchNewsServer = cache(
 
 // 単一記事取得
 export const fetchArticleByIdServer = cache(
-  async (
-    articleId: string,
-    language: string = "ja",
-  ): Promise<Article | null> => {
-    const cached = await getCachedArticle<Article>(articleId);
-
-    if (cached) {
-      console.log("✅ [Server] Article served from Redis cache:", articleId);
-
-      return cached;
-    }
-
+  async (articleId: string, language: string = "ja"): Promise<Article | null> => {
     try {
       const params = new URLSearchParams({
         apikey: NEWSDATA_API_KEY,
         id: articleId,
       });
 
-      console.log(
-        "🔍 [Server] Fetching article by id (not in cache):",
-        articleId,
-      );
+      console.log("🔍 [Server] Fetching article by id:", articleId);
 
-      const response = await fetch(
-        `${NEWSDATA_BASE_URL}?${params.toString()}`,
-        {
-          next: { revalidate: 3600 },
-        },
-      );
+      const response = await fetch(`${NEWSDATA_BASE_URL}?${params.toString()}`, {
+        next: {revalidate: ARTICLE_REVALIDATE_SEC},
+      });
 
       if (!response.ok) {
         const errorBody = await response.text();
 
-        console.error(
-          "❌ [Server] Article fetch error:",
-          response.status,
-          errorBody,
-          "for id:",
-          articleId,
-        );
+        console.error("❌ [Server] Article fetch error:", response.status, errorBody, "for id:", articleId);
 
         return null;
       }
@@ -211,17 +182,12 @@ export const fetchArticleByIdServer = cache(
       const found = data.results?.[0];
 
       if (!found) {
-        console.error(
-          "❌ [Server] Article not found (expired from 48h window?):",
-          articleId,
-        );
+        console.error("❌ [Server] Article not found (expired from 48h window?):", articleId);
 
         return null;
       }
 
       const article = normalizeArticle(found);
-
-      await cacheArticle(article.uuid, article);
 
       console.log("✅ [Server] Found article via direct fetch:", article.title);
 
@@ -236,11 +202,7 @@ export const fetchArticleByIdServer = cache(
 
 // 類似記事取得
 export const fetchSimilarArticlesServer = cache(
-  async (
-    category: string,
-    limit: number = 3,
-    language: string = "ja",
-  ): Promise<Article[]> => {
+  async (category: string, limit: number = 3, language: string = "ja"): Promise<Article[]> => {
     try {
       const params = new URLSearchParams({
         apikey: NEWSDATA_API_KEY,
@@ -254,17 +216,11 @@ export const fetchSimilarArticlesServer = cache(
         params.append("category", mappedCategory);
       }
 
-      console.log(
-        "🔍 [Server] Fetching similar articles for category:",
-        category,
-      );
+      console.log("🔍 [Server] Fetching similar articles for category:", category);
 
-      const response = await fetch(
-        `${NEWSDATA_BASE_URL}?${params.toString()}`,
-        {
-          next: { revalidate: 3600 },
-        },
-      );
+      const response = await fetch(`${NEWSDATA_BASE_URL}?${params.toString()}`, {
+        next: {revalidate: LIST_REVALIDATE_SEC},
+      });
 
       if (!response.ok) {
         return [];
@@ -272,8 +228,6 @@ export const fetchSimilarArticlesServer = cache(
 
       const data: NewsDataResponse = await response.json();
       const articles = (data.results || []).map(normalizeArticle);
-
-      await Promise.all(articles.map((a) => cacheArticle(a.uuid, a)));
 
       console.log("✅ [Server] Fetched similar articles:", articles.length);
 
