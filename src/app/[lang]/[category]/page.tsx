@@ -1,7 +1,7 @@
 // app/[lang]/[category]/page.tsx
 import CategoryContent from "@/components/CategoryContent";
-import { fetchNewsServer } from "@/utils/serverNewsAPI";
-import { Metadata } from "next";
+import {fetchNewsServer} from "@/utils/serverNewsAPI";
+import {Metadata} from "next";
 
 interface CategoryPageProps {
   params: Promise<{
@@ -15,10 +15,8 @@ interface CategoryPageProps {
 }
 
 // ✅ 動的メタデータ生成
-export async function generateMetadata({
-  params,
-}: CategoryPageProps): Promise<Metadata> {
-  const { lang, category } = await params;
+export async function generateMetadata({params}: CategoryPageProps): Promise<Metadata> {
+  const {lang, category} = await params;
 
   // categoryNames
   const categoryNames: Record<string, Record<string, string>> = {
@@ -30,9 +28,9 @@ export async function generateMetadata({
       entertainment: "エンタメ",
       science: "科学",
       health: "健康",
-      politics: "政治", // ✅ 追加
-      food: "グルメ", // ✅ 追加
-      tourism: "旅行", // ✅ 追加
+      politics: "政治",
+      food: "グルメ",
+      tourism: "旅行",
     },
     en: {
       top: "Top News",
@@ -42,9 +40,9 @@ export async function generateMetadata({
       entertainment: "Entertainment",
       science: "Science",
       health: "Health",
-      politics: "Politics", // ✅ 追加
-      food: "Food", // ✅ 追加
-      tourism: "Travel", // ✅ 追加
+      politics: "Politics",
+      food: "Food",
+      tourism: "Travel",
     },
   };
 
@@ -60,10 +58,9 @@ export async function generateMetadata({
   };
 }
 
-// ✅ 静的パス生成（カテゴリ×言語の14件のみ。cursorはクエリパラメータなので対象外）
+// ✅ 静的パス生成（カテゴリ×言語の20件のみ。cursorはクエリパラメータなので対象外）
 export async function generateStaticParams() {
   const languages = ["ja", "en"];
-  // generateStaticParams
   const categories = [
     "top",
     "business",
@@ -72,14 +69,14 @@ export async function generateStaticParams() {
     "entertainment",
     "science",
     "health",
-    "politics", // ✅ 追加
-    "food", // ✅ 追加
-    "tourism", // ✅ 追加
+    "politics",
+    "food",
+    "tourism",
   ];
   const params = [];
   for (const lang of languages) {
     for (const category of categories) {
-      params.push({ lang, category });
+      params.push({lang, category});
     }
   }
 
@@ -87,15 +84,12 @@ export async function generateStaticParams() {
 }
 
 // ✅ サーバーコンポーネント
-export default async function CategoryPage({
-  params,
-  searchParams,
-}: CategoryPageProps) {
-  const { lang, category } = await params;
-  const { q: searchQuery, cursor } = await searchParams;
+export default async function CategoryPage({params, searchParams}: CategoryPageProps) {
+  const {lang, category} = await params;
+  const {q: searchQuery, cursor} = await searchParams;
 
   // ✅ NewsData.ioはページ番号ではなくnextPageトークン(cursor)方式
-  const { articles, nextPage } = await fetchNewsServer({
+  const {articles, nextPage} = await fetchNewsServer({
     category: category === "top" ? undefined : category,
     language: lang,
     cursor,
@@ -115,6 +109,6 @@ export default async function CategoryPage({
 }
 
 // ✅ 再検証設定
-// serverNewsAPI.ts 側の fetch も revalidate: 86400 で統一。
-// 無料プランの1日クレジット枠を守るため、必ずfetch側と同じ値にすること。
-export const revalidate = 86400;
+// serverNewsAPI.ts の LIST_REVALIDATE_SEC（3時間）と同じ値にする。
+// Next.js の仕様で、ここは数値リテラルで書く必要がある（定数や計算式は不可）。
+export const revalidate = 10800;

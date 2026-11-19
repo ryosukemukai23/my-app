@@ -9,7 +9,8 @@ const PLACEHOLDER_IMAGE = "https://placehold.jp/cccccc/ffffff/800x500.png?text=n
 const FREE_PLAN_MAX_SIZE = 10;
 
 // 一覧・類似記事のキャッシュ期間（秒）
-const LIST_REVALIDATE_SEC = 60 * 60; // 1時間
+// page.tsx の `export const revalidate`（10800）と同じ値にすること
+const LIST_REVALIDATE_SEC = 60 * 60 * 3; // 3時間
 // 記事詳細のキャッシュ期間（秒）。内容は変わらず、APIの取得可能期間も限られるので長めにする
 const ARTICLE_REVALIDATE_SEC = 60 * 60 * 24; // 24時間
 
