@@ -6,16 +6,8 @@ import {Article} from "@/types/Article";
 import {validateImageUrl} from "@/utils/apiUtils";
 import {formatDate} from "@/utils/dateUtils";
 import {CalendarToday, Source} from "@mui/icons-material";
-import {
-  Box,
-  Card,
-  CardActionArea,
-  CardContent,
-  CardMedia,
-  Chip,
-  Typography,
-} from "@mui/material";
-import {useRouter} from "next/navigation";
+import {Box, Card, CardActionArea, CardContent, CardMedia, Chip, Typography} from "@mui/material";
+import NextLink from "next/link";
 import React from "react";
 
 interface MuiArticleCardProps {
@@ -24,48 +16,11 @@ interface MuiArticleCardProps {
 
 const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
   const {language} = useLanguage();
-  const router = useRouter();
 
   // 記事IDを決定（優先順位: uuid > url > title）
   const articleId = article.uuid || article.url || article.title;
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-
-    try {
-      if (!articleId) {
-        console.error("❌ Article has no valid ID");
-        return;
-      }
-
-      // 記事データをsessionStorageに保存（完全な記事オブジェクト）
-      const storageKey = `article_${encodeURIComponent(articleId)}`;
-      const articleData = JSON.stringify({
-        ...article,
-        // 確実にタイトルとカテゴリを保存
-        title: article.title,
-        categories: article.categories,
-      });
-
-      sessionStorage.setItem(storageKey, articleData);
-
-      console.log("✅ Saved article to sessionStorage");
-      console.log("   Storage key:", storageKey);
-      console.log("   Article ID:", articleId);
-      console.log("   Title:", article.title);
-      console.log("   Categories:", article.categories);
-
-      // 記事ページに遷移（URLエンコード）
-      const encodedId = encodeURIComponent(articleId);
-      router.push(`/${language}/article/${encodedId}`);
-    } catch (error) {
-      console.error("❌ Failed to save article data:", error);
-      // エラーが発生しても、元記事のURLに直接遷移
-      if (article.url) {
-        window.open(article.url, "_blank");
-      }
-    }
-  };
+  const href = articleId ? `/${language}/article/${encodeURIComponent(articleId)}` : undefined;
 
   return (
     <Card
@@ -82,7 +37,9 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
       }}
     >
       <CardActionArea
-        onClick={handleClick}
+        component={NextLink}
+        href={href ?? "#"}
+        prefetch
         sx={{
           flexGrow: 1,
           display: "flex",
@@ -102,27 +59,20 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
             sx={{
               width: "100%",
               height: {
-                xs: 300, // スマホ: 200px
-                sm: 400, // タブレット: 240px
-                md: 500, // PC: 280px
+                xs: 300,
+                sm: 400,
+                md: 500,
               },
-              objectFit: "cover", // 画像を切り抜いてフィット
+              objectFit: "cover",
             }}
           />
         )}
 
-        <CardContent
-          sx={{flexGrow: 1, display: "flex", flexDirection: "column"}}
-        >
+        <CardContent sx={{flexGrow: 1, display: "flex", flexDirection: "column"}}>
           {/* カテゴリタグ */}
           {article.categories && article.categories.length > 0 && (
             <Box sx={{mb: 1.5}}>
-              <Chip
-                label={article.categories[0]}
-                size="small"
-                color="primary"
-                sx={{fontWeight: 600}}
-              />
+              <Chip label={article.categories[0]} size="small" color="primary" sx={{fontWeight: 600}} />
             </Box>
           )}
 
@@ -170,7 +120,6 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
               mt: "auto",
             }}
           >
-            {/* 日付 */}
             {article.published_at && (
               <Box sx={{display: "flex", alignItems: "center", gap: 0.5}}>
                 <CalendarToday sx={{fontSize: 16, color: "text.secondary"}} />
@@ -180,7 +129,6 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
               </Box>
             )}
 
-            {/* ソース */}
             {article.source && (
               <Box sx={{display: "flex", alignItems: "center", gap: 0.5}}>
                 <Source sx={{fontSize: 16, color: "primary.main"}} />

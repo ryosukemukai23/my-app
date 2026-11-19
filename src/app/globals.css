@@ -1,6 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #801b2b;
+  --color-accent-light: #a02238;
+  --color-accent-dark: #60151f;
+}
 
 :root {
   --background: #ffffff;

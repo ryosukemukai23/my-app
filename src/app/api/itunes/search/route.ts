@@ -1,9 +1,18 @@
 // app/api/itunes/search/route.ts
 
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
 
 const ITUNES_SEARCH_URL = "https://itunes.apple.com/search";
 const APPLE_CHARTS_URL = "https://rss.applemarketingtools.com/api/v2";
+
+// ✅ 外部APIが応答しなくても永遠に待たない（5秒で打ち切る）
+const FETCH_TIMEOUT_MS = 5000;
+
+const fetchWithTimeout = (url: string, options: RequestInit & {next?: {revalidate: number}} = {}) =>
+  fetch(url, {
+    ...options,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
 
 interface ItunesRawTrack {
   trackId: number;
@@ -72,9 +81,7 @@ function diversifyTracks(results: ItunesRawTrack[], limit: number) {
     const artistKey = normalizeText(track.artistName || "");
 
     const collectionKey =
-      track.collectionId != null
-        ? String(track.collectionId)
-        : normalizeText(track.collectionName || "");
+      track.collectionId != null ? String(track.collectionId) : normalizeText(track.collectionName || "");
 
     if (usedArtists.has(artistKey)) {
       continue;
@@ -114,9 +121,7 @@ function diversifyTracks(results: ItunesRawTrack[], limit: number) {
       }
 
       const collectionKey =
-        track.collectionId != null
-          ? String(track.collectionId)
-          : normalizeText(track.collectionName || "");
+        track.collectionId != null ? String(track.collectionId) : normalizeText(track.collectionName || "");
 
       /*
        * 可能なら同じアルバムはまだ避ける。
@@ -162,10 +167,7 @@ function diversifyTracks(results: ItunesRawTrack[], limit: number) {
  * 取得できなければ "JP" にフォールバック。
  */
 function detectCountry(request: NextRequest): string {
-  const raw =
-    request.headers.get("x-vercel-ip-country") ||
-    request.headers.get("cf-ipcountry") ||
-    "JP";
+  const raw = request.headers.get("x-vercel-ip-country") || request.headers.get("cf-ipcountry") || "JP";
 
   const country = raw.toUpperCase();
 
@@ -176,17 +178,12 @@ function detectCountry(request: NextRequest): string {
  * Apple公式の国別最新チャート（Most Played）を取得する。
  * 認証不要の公開エンドポイント。
  */
-async function fetchCountryTopSongs(
-  country: string,
-  limit: number,
-): Promise<ItunesRawTrack[]> {
-  const url = `${APPLE_CHARTS_URL}/${country.toLowerCase()}/music/most-played/${Math.max(
-    limit * 3,
-    20,
-  )}/songs.json`;
+async function fetchCountryTopSongs(country: string): Promise<ItunesRawTrack[]> {
+  // ✅ 件数は固定。limitごとにURLが変わるとキャッシュが分散するため
+  const url = `${APPLE_CHARTS_URL}/${country.toLowerCase()}/music/most-played/30/songs.json`;
 
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       next: {
         revalidate: 3600,
       },
@@ -216,7 +213,7 @@ async function fetchCountryTopSongs(
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+  const {searchParams} = new URL(request.url);
 
   const rawTerm = searchParams.get("term") || "";
   const rawLimit = searchParams.get("limit") || "5";
@@ -228,9 +225,7 @@ export async function GET(request: NextRequest) {
    */
   const requestedLimit = Number.parseInt(rawLimit, 10);
 
-  const limit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(requestedLimit, 1), 20)
-    : 5;
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 20) : 5;
 
   const country = detectCountry(request);
 
@@ -239,12 +234,10 @@ export async function GET(request: NextRequest) {
    * 検索語が無い/ヒットしない/エラー時に共通で使う。
    */
   const respondWithChart = async () => {
-    const chartTracks = await fetchCountryTopSongs(country, limit);
+    const chartTracks = await fetchCountryTopSongs(country);
     const results = diversifyTracks(chartTracks, limit);
 
-    console.log(
-      `🎵 [iTunes Proxy] Chart fallback (${country}): ${results.length}`,
-    );
+    console.log(`🎵 [iTunes Proxy] Chart fallback (${country}): ${results.length}`);
 
     return NextResponse.json({
       resultCount: results.length,
@@ -254,11 +247,10 @@ export async function GET(request: NextRequest) {
   };
 
   /*
-   * 検索語が極端に長い場合はそのまま投げない。
-   *
-   * 記事全文などが誤って渡ってきた場合の保険。
+   * ✅ 検索語は50文字までに短縮。
+   * 記事タイトル全文だと0件になりやすく、無駄な往復が増える。
    */
-  const searchTerm = normalizeText(term).slice(0, 100);
+  const searchTerm = normalizeText(term).slice(0, 50);
 
   if (!searchTerm) {
     return respondWithChart();
@@ -281,7 +273,7 @@ export async function GET(request: NextRequest) {
   try {
     console.log(`🎵 [iTunes Proxy] Search: "${searchTerm}"`);
 
-    const response = await fetch(`${ITUNES_SEARCH_URL}?${params.toString()}`, {
+    const response = await fetchWithTimeout(`${ITUNES_SEARCH_URL}?${params.toString()}`, {
       next: {
         revalidate: 3600,
       },
@@ -290,20 +282,14 @@ export async function GET(request: NextRequest) {
     if (!response.ok) {
       const body = await response.text();
 
-      console.error(
-        "❌ [iTunes Proxy] API Error:",
-        response.status,
-        body.slice(0, 500),
-      );
+      console.error("❌ [iTunes Proxy] API Error:", response.status, body.slice(0, 500));
 
       return respondWithChart();
     }
 
     const data = await response.json();
 
-    const rawResults: ItunesRawTrack[] = Array.isArray(data.results)
-      ? data.results
-      : [];
+    const rawResults: ItunesRawTrack[] = Array.isArray(data.results) ? data.results : [];
 
     const results = diversifyTracks(rawResults, limit);
 

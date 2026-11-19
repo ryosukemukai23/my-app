@@ -170,18 +170,3 @@ npm run dev
 ✅ **TypeScript 完全対応**: 型安全な実装  
 ✅ **複数 API 統合**: 5 つの外部 API を統合管理
 
-## 📝 TODO
-
-- [ ] MUI 版 記事詳細ページ作成
-- [ ] MUI 版 天気詳細ページ作成
-- [ ] MUI Dialog によるモーダル実装
-- [ ] MUI Snackbar によるトースト通知
-- [ ] アクセシビリティの向上
-
-## 📄 ライセンス
-
-MIT License
-
-## 👤 作成者
-
-Your Name - Portfolio Project

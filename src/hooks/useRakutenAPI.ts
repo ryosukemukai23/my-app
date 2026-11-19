@@ -1,9 +1,9 @@
 // hooks/useRakutenAPI.ts
 "use client";
 
-import { RakutenAPIResponse, RakutenProduct } from "@/types/RakutenProduct";
-import { getCachedData, setCachedData } from "@/utils/cacheUtils";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {RakutenAPIResponse, RakutenProduct} from "@/types/RakutenProduct";
+import {getCachedData, setCachedData} from "@/utils/cacheUtils";
+import {useCallback, useEffect, useMemo, useState} from "react";
 
 interface UseRakutenAPIParams {
   keyword?: string;
@@ -18,6 +18,7 @@ interface UseRakutenAPIParams {
 const getKeywordFromNewsCategory = (category: string): string => {
   const categoryKeywordMap: Record<string, string> = {
     general: "人気",
+    top: "人気",
     business: "ビジネス書",
     tech: "ガジェット",
     technology: "ガジェット",
@@ -28,6 +29,7 @@ const getKeywordFromNewsCategory = (category: string): string => {
     politics: "政治",
     world: "旅行",
     food: "グルメ",
+    tourism: "旅行",
     travel: "旅行",
     lifestyle: "ライフスタイル",
     fashion: "ファッション",
@@ -68,46 +70,16 @@ export default function useRakutenAPI({
     return "";
   }, [keyword, newsCategory]);
 
-  const fetchProducts = useCallback(async () => {
-    if (!finalKeyword && !genreId) {
-      console.log("⏸️ No keyword or genreId provided, skipping fetch");
-      setProducts([]);
-      setLoading(false);
-      return;
-    }
-
-    const cacheKey = `rakuten_${finalKeyword}_${genreId}_${hits}_${page}`;
-
-    const cached = getCachedData<{
-      products: RakutenProduct[];
-      totalCount: number;
-    }>(cacheKey);
-
-    if (cached) {
-      console.log("✅ Using cached Rakuten products:", cached.products.length);
-      setProducts(cached.products);
-      setTotalCount(cached.totalCount);
-      setLoading(false);
-      return;
-    }
-
-    // ⚠️ 以前ここに他の無関係なAPI（Spotify/Weather/SportsDB）と共有の
-    //   canMakeRequest()ゲートがあった。実際のレート制御は
-    //   app/api/rakuten/search/route.ts 側のスロットリング(1.1秒間隔)＋
-    //   1時間の共有キャッシュ(revalidate: 3600)で既に行われているため、
-    //   このクライアント側の重複した・無関係な制限は撤去した。
-
-    setLoading(true);
-    setError(null);
-
-    try {
+  // ✅ 1回分の検索（プロキシ経由）
+  const requestProducts = useCallback(
+    async (kw: string) => {
       const params = new URLSearchParams({
         hits: hits.toString(),
         page: page.toString(),
       });
 
-      if (finalKeyword) {
-        params.append("keyword", finalKeyword);
+      if (kw) {
+        params.append("keyword", kw);
       }
 
       if (genreId) {
@@ -115,8 +87,7 @@ export default function useRakutenAPI({
       }
 
       console.log("🔍 Fetching Rakuten products via proxy:", {
-        keyword: finalKeyword,
-        newsCategory,
+        keyword: kw,
         genreId,
         hits,
         page,
@@ -134,7 +105,7 @@ export default function useRakutenAPI({
         throw new Error("Invalid API response format");
       }
 
-      const productList: RakutenProduct[] = data.Items.map((item, index) => ({
+      const list: RakutenProduct[] = data.Items.map((item, index) => ({
         rank: (page - 1) * hits + index + 1,
         itemName: item.Item.itemName,
         itemPrice: item.Item.itemPrice,
@@ -163,13 +134,63 @@ export default function useRakutenAPI({
         endTime: item.Item.endTime || "",
       }));
 
-      const totalCount = data.hits || 0;
+      return {list, total: data.hits || 0};
+    },
+    [genreId, hits, page],
+  );
 
-      console.log("✅ Fetched Rakuten products:", productList.length);
+  const fetchProducts = useCallback(async () => {
+    if (!finalKeyword && !genreId) {
+      console.log("⏸️ No keyword or genreId provided, skipping fetch");
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
 
-      setProducts(productList);
-      setTotalCount(totalCount);
-      setCachedData(cacheKey, { products: productList, totalCount });
+    const cacheKey = `rakuten_${finalKeyword}_${genreId}_${hits}_${page}`;
+
+    const cached = getCachedData<{
+      products: RakutenProduct[];
+      totalCount: number;
+    }>(cacheKey);
+
+    if (cached && cached.products.length > 0) {
+      console.log("✅ Using cached Rakuten products:", cached.products.length);
+      setProducts(cached.products);
+      setTotalCount(cached.totalCount);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      let result = await requestProducts(finalKeyword);
+
+      // ✅ 記事タイトル由来の長いキーワードは0件になりやすい。
+      //   0件ならカテゴリ由来のキーワードで再検索する。
+      if (result.list.length === 0 && keyword && newsCategory) {
+        const fallbackKeyword = getKeywordFromNewsCategory(newsCategory);
+
+        if (fallbackKeyword !== finalKeyword) {
+          console.log("↩️ Rakuten 0 hits, fallback to:", fallbackKeyword);
+          result = await requestProducts(fallbackKeyword);
+        }
+      }
+
+      console.log("✅ Fetched Rakuten products:", result.list.length);
+
+      setProducts(result.list);
+      setTotalCount(result.total);
+
+      // ✅ 空の結果はキャッシュしない（24時間空のままになるのを防ぐ）
+      if (result.list.length > 0) {
+        setCachedData(cacheKey, {
+          products: result.list,
+          totalCount: result.total,
+        });
+      }
     } catch (err) {
       console.error("❌ Rakuten API error:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch products");
@@ -177,7 +198,7 @@ export default function useRakutenAPI({
     } finally {
       setLoading(false);
     }
-  }, [finalKeyword, genreId, hits, page, newsCategory]);
+  }, [finalKeyword, genreId, hits, page, keyword, newsCategory, requestProducts]);
 
   useEffect(() => {
     if (autoFetch) {

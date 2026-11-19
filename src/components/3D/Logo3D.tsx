@@ -27,8 +27,7 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
     let raf = 0;
     const start = performance.now();
 
-    const easeInOutCubic = (t: number) =>
-      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
     const draw = (now: number) => {
       const elapsed = now - start;
@@ -45,8 +44,8 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
       const cy = size / 2;
       const radius = size * 0.44;
 
-      // ===== ベース（オーブ） - 元の色合いに戻す =====
-      // 元ファイルの赤系グラデーション: #c43a4f -> #801b2b -> #3d0a12
+      // ===== ベース（オーブ） =====
+      // 赤系グラデーション: #c43a4f -> #801b2b -> #3d0a12
       {
         const baseGradient = ctx.createRadialGradient(
           cx - radius * 0.35,
@@ -54,7 +53,7 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
           radius * 0.1,
           cx,
           cy,
-          radius
+          radius,
         );
         baseGradient.addColorStop(0, "#c43a4f");
         baseGradient.addColorStop(0.6, "#801b2b");
@@ -66,24 +65,7 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
         ctx.fill();
       }
 
-      // subtle vignette to give depth
-      {
-        const vignette = ctx.createRadialGradient(
-          cx,
-          cy,
-          radius * 0.1,
-          cx,
-          cy,
-          radius * 1.6
-        );
-        // vignette.addColorStop(0, "rgba(255,255,255,0)");
-        // vignette.addColorStop(1, "rgba(0,0,0,0.28)");
-        ctx.fillStyle = vignette;
-        ctx.fillRect(0, 0, size, size);
-      }
-
       // ===== X軸回転表現 =====
-      // cos(angle) controls facing and vertical compression
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
       const scaleY = Math.abs(cos); // vertical compression to simulate X-rotation
@@ -94,11 +76,9 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
       ctx.save();
       ctx.translate(cx, cy);
 
-      // Apply vertical scale to simulate X-axis rotation; add tiny perspective shear
       const shearX = sin * 0.04 * (facingFront ? 1 : -1);
       ctx.transform(1, shearX, 0, scaleY, 0, 0);
 
-      // For backside, prefer a slightly darker/muted top color
       const topColor = facingFront ? "#ffffff" : "#f0e9e9";
       const midColor = facingFront ? "#ffdfe4" : "#c4b3b6";
       const shadowColor = facingFront ? "#8b1b2b" : "#2e2630";
@@ -109,23 +89,18 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      // Extrusion: draw layered shadow/extrude behind the face, offset along Y (depth)
+      // Extrusion
       const extrudeSteps = Math.max(5, Math.round(size / 22));
       for (let i = extrudeSteps; i >= 1; i--) {
-        const t = i / extrudeSteps;
-        const offsetY = (t * depth) | 0;
-        const alpha = 0.5 * (t / extrudeSteps);
+        const step = i / extrudeSteps;
+        const offsetY = (step * depth) | 0;
+        const alpha = 0.5 * (step / extrudeSteps);
         ctx.fillStyle = `rgba(15,8,10,${alpha})`;
         ctx.fillText(text, 0, offsetY);
       }
 
-      // Top face: gradient that uses base (light) colors but tuned to red base mood
-      const faceGrad = ctx.createLinearGradient(
-        -size * 0.25,
-        -size * 0.35,
-        size * 0.25,
-        size * 0.35
-      );
+      // Top face
+      const faceGrad = ctx.createLinearGradient(-size * 0.25, -size * 0.35, size * 0.25, size * 0.35);
       faceGrad.addColorStop(0, topColor);
       faceGrad.addColorStop(0.5, midColor);
       faceGrad.addColorStop(1, shadowColor);
@@ -140,12 +115,7 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
       // subtle rim highlight when front-facing
       if (facingFront) {
         ctx.globalCompositeOperation = "screen";
-        const rim = ctx.createLinearGradient(
-          -size * 0.2,
-          -size * 0.6,
-          size * 0.2,
-          size * 0.2
-        );
+        const rim = ctx.createLinearGradient(-size * 0.2, -size * 0.6, size * 0.2, size * 0.2);
         rim.addColorStop(0, "rgba(255,255,255,0.36)");
         rim.addColorStop(0.6, "rgba(255,255,255,0.06)");
         rim.addColorStop(1, "rgba(255,255,255,0)");
@@ -156,13 +126,11 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
 
       ctx.restore();
 
-      // soft shadow beneath to ground the glyph (adjust with rotation so shadow squashes when flipped)
+      // soft shadow beneath
       {
         ctx.save();
-        // move shadow lower as depth increases
         const shadowY = cy + size * 0.34 + Math.max(0, depth) * 0.6;
         ctx.translate(cx, shadowY);
-        // shadow squashes more when the glyph is edge-on (scale by scaleY)
         ctx.scale(1, 0.22 + 0.38 * scaleY);
         ctx.beginPath();
         ctx.ellipse(0, 0, radius * 0.9, radius * 0.5, 0, 0, Math.PI * 2);
@@ -174,7 +142,7 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
         ctx.restore();
       }
 
-      // light reflection on orb (using original red tones subtly)
+      // light reflection on orb
       {
         ctx.beginPath();
         const hg = ctx.createRadialGradient(
@@ -183,7 +151,7 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
           0,
           cx - radius * 0.45,
           cy - radius * 0.45,
-          radius * 0.9
+          radius * 0.9,
         );
         hg.addColorStop(0, "rgba(255,255,255,0.22)");
         hg.addColorStop(0.35, "rgba(255,255,255,0.06)");
@@ -192,13 +160,46 @@ const Logo3D: React.FC<Logo3DProps> = ({size = 120, durationMs = 1400}) => {
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
         ctx.fill();
       }
-
-      raf = requestAnimationFrame(draw);
     };
 
-    raf = requestAnimationFrame(draw);
+    const loop = (now: number) => {
+      draw(now);
+      raf = requestAnimationFrame(loop);
+    };
 
-    return () => cancelAnimationFrame(raf);
+    const stop = () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    };
+
+    const startLoop = () => {
+      if (raf === 0) raf = requestAnimationFrame(loop);
+    };
+
+    // ✅ アニメーション軽減設定のユーザーには静止画1枚
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (reduceMotion) {
+      draw(start);
+      return;
+    }
+
+    // ✅ タブが非表示のときは描画を止める
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        startLoop();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    startLoop();
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      stop();
+    };
   }, [size, durationMs]);
 
   return <canvas ref={canvasRef} width={size} height={size} />;

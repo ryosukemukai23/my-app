@@ -4,11 +4,10 @@
 import MuiArticleCard from "@/components/MUI/MuiArticleCard";
 import MuiPagination from "@/components/MUI/MuiPagination";
 import MuiSidebar from "@/components/MUI/MuiSidebar";
-import RecommendationCard from "@/components/RecommendationCard";
-import { Article } from "@/types/Article";
-import { Alert, Box, Container, Grid } from "@mui/material";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import {Article} from "@/types/Article";
+import {Alert, Box, Container, Grid} from "@mui/material";
+import {useRouter} from "next/navigation";
+import {useTransition} from "react";
 
 interface CategoryContentProps {
   articles: Article[];
@@ -18,43 +17,36 @@ interface CategoryContentProps {
   searchQuery: string;
 }
 
-export default function CategoryContent({
-  articles,
-  category,
-  lang,
-  nextPageToken,
-  searchQuery,
-}: CategoryContentProps) {
+export default function CategoryContent({articles, category, lang, nextPageToken, searchQuery}: CategoryContentProps) {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  // ✅ useTransition は遷移完了で自動的に false に戻る。
+  const [isPending, startTransition] = useTransition();
 
   // ✅ 「次へ」：現在のnextPageTokenをそのままcursorとしてURLに積む
   const handleNext = () => {
     if (!nextPageToken) return;
 
-    setIsLoading(true);
-
     const params = new URLSearchParams();
     if (searchQuery) params.set("q", searchQuery);
     params.set("cursor", nextPageToken);
 
-    router.push(`/${lang}/${category}?${params.toString()}`);
+    startTransition(() => {
+      router.push(`/${lang}/${category}?${params.toString()}`);
+    });
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({top: 0, behavior: "smooth"});
   };
 
   return (
     <Container maxWidth="xl">
       <Grid container spacing={4}>
         {/* メインコンテンツ */}
-        <Grid size={{ xs: 12, lg: 8 }}>
+        <Grid size={{xs: 12, lg: 8}}>
           {/* 検索結果表示 */}
           {searchQuery && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{mb: 2}}>
               <Alert severity="info">
-                {lang === "ja"
-                  ? `検索キーワード: "${searchQuery}"`
-                  : `Search results for: "${searchQuery}"`}
+                {lang === "ja" ? `検索キーワード: "${searchQuery}"` : `Search results for: "${searchQuery}"`}
               </Alert>
             </Box>
           )}
@@ -62,37 +54,19 @@ export default function CategoryContent({
           {/* 記事一覧 */}
           {articles.length > 0 ? (
             <>
-              <Box
-                sx={{ display: "flex", flexDirection: "column", gap: 3, mb: 4 }}
-              >
+              <Box sx={{display: "flex", flexDirection: "column", gap: 3, mb: 4}}>
                 {articles.map((article, index) => (
                   <Box key={`article-${article.uuid}-${index}`}>
                     <MuiArticleCard article={article} />
-
-                    {/* 2件目の後にAIレコメンド表示 */}
-                    {index === 1 && article.title && article.content && (
-                      <Box sx={{ mt: 3 }}>
-                        <RecommendationCard
-                          articleTitle={article.title}
-                          articleContent={article.content}
-                          category={category}
-                        />
-                      </Box>
-                    )}
                   </Box>
                 ))}
               </Box>
 
               {/* ページネーション（「次へ」のみ） */}
-              <MuiPagination
-                hasNextPage={!!nextPageToken}
-                isLoading={isLoading}
-                onNext={handleNext}
-                lang={lang}
-              />
+              <MuiPagination hasNextPage={!!nextPageToken} isLoading={isPending} onNext={handleNext} lang={lang} />
             </>
           ) : (
-            <Box sx={{ textAlign: "center", py: 8 }}>
+            <Box sx={{textAlign: "center", py: 8}}>
               <Alert severity="info">
                 {searchQuery
                   ? lang === "ja"
@@ -107,14 +81,8 @@ export default function CategoryContent({
         </Grid>
 
         {/* サイドバー */}
-        <Grid size={{ xs: 12, lg: 4 }}>
-          <MuiSidebar
-            category={category}
-            categories={[category]} // ✅ 前回のMuiSidebar変更に合わせる
-            searchQuery={searchQuery}
-            // ✅ articleKeyword は渡さない。記事詳細ページ（ArticleContent.tsx）専用にする。
-            //   一覧ページでは productKeyword が空なら "popular" にフォールバックする。
-          />
+        <Grid size={{xs: 12, lg: 4}}>
+          <MuiSidebar category={category} categories={[category]} searchQuery={searchQuery} />
         </Grid>
       </Grid>
     </Container>

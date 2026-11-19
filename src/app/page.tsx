@@ -8,8 +8,8 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    // デフォルトで /ja/top にリダイレクト
-    router.push("/ja/top");
+    // デフォルトで /ja/top にリダイレクト（履歴を残さない）
+    router.replace("/ja/top");
   }, [router]);
 
   return (

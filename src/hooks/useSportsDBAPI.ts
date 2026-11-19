@@ -1,17 +1,9 @@
 // hooks/useSportsDBAPI.ts
 "use client";
 
-import {
-  SportsDBEvent,
-  SportsDBResponse,
-  SportsDBTeam,
-} from "@/types/SportsDBEvent";
-import { getCachedData, setCachedData } from "@/utils/cacheUtils";
-import { useEffect, useState } from "react";
-
-// API key
-const SPORTSDB_API_KEY = "3"; // 無料版のキー
-const SPORTSDB_API_BASE_URL = `https://www.thesportsdb.com/api/v1/json/${SPORTSDB_API_KEY}`;
+import {SportsDBEvent, SportsDBResponse, SportsDBTeam} from "@/types/SportsDBEvent";
+import {getCachedData, setCachedData} from "@/utils/cacheUtils";
+import {useEffect, useState} from "react";
 
 // 主要サッカーリーグID
 const MAJOR_SOCCER_LEAGUES = {
@@ -22,10 +14,20 @@ const MAJOR_SOCCER_LEAGUES = {
   ligue1: "4334",
 };
 
+// ✅ thesportsdb.com は直接呼ばず、自前の Route Handler 経由で取得する
+const fetchFromProxy = async (params: Record<string, string>): Promise<SportsDBResponse> => {
+  const qs = new URLSearchParams(params);
+  const response = await fetch(`/api/sportsdb?${qs.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.status}`);
+  }
+
+  return response.json();
+};
+
 // 次のイベント取得（リーグID指定） - メイン機能
-// ⚠️ `enabled` を追加。以前はこのフックが呼ばれると常にfetchしてしまい、
-//   結果として useSportsDBAPI 経由で「スポーツカテゴリでないページ」
-//   でも毎回 thesportsdb.com にリクエストが飛んでいた。
+// `enabled` が false のときは一切 fetch しない。
 export const useSportsDBNextEvents = (
   leagueId: string = MAJOR_SOCCER_LEAGUES.premierLeague,
   enabled: boolean = true,
@@ -56,16 +58,9 @@ export const useSportsDBNextEvents = (
       setError(null);
 
       try {
-        const url = `${SPORTSDB_API_BASE_URL}/eventsnextleague.php?id=${leagueId}`;
-        console.log("📅 Fetching next events:", url);
+        console.log("📅 Fetching next events:", leagueId);
 
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(`API Error: ${response.status}`);
-        }
-
-        const data: SportsDBResponse = await response.json();
+        const data = await fetchFromProxy({type: "next", id: leagueId});
         const events = data.events || [];
 
         console.log("✅ Next events received:", events.length, "events");
@@ -75,10 +70,8 @@ export const useSportsDBNextEvents = (
           setCachedData(cacheKey, events);
         }
       } catch (err) {
-        console.error("❌ Failed to fetch next events:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch next events",
-        );
+        console.warn("⚠️ Failed to fetch next events:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch next events");
         setEvents([]);
       } finally {
         setLoading(false);
@@ -88,7 +81,7 @@ export const useSportsDBNextEvents = (
     fetchNextEvents();
   }, [leagueId, enabled]);
 
-  return { events, loading, error };
+  return {events, loading, error};
 };
 
 // 過去のイベント取得（リーグID + シーズン指定）
@@ -119,19 +112,14 @@ export const useSportsDBPastEvents = (leagueId: string, season: string) => {
       setError(null);
 
       try {
-        const url = `${SPORTSDB_API_BASE_URL}/eventsseason.php?id=${leagueId}&s=${season}`;
-        console.log("📅 Fetching past events:", url);
+        console.log("📅 Fetching past events:", leagueId, season);
 
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(`API Error: ${response.status}`);
-        }
-
-        const data: SportsDBResponse = await response.json();
-        const events = (data.events || []).filter(
-          (e) => e.intHomeScore && e.intAwayScore,
-        );
+        const data = await fetchFromProxy({
+          type: "past",
+          id: leagueId,
+          season,
+        });
+        const events = (data.events || []).filter((e) => e.intHomeScore && e.intAwayScore);
 
         console.log("✅ Past events received:", events.length, "events");
         setEvents(events.slice(0, 15));
@@ -140,10 +128,8 @@ export const useSportsDBPastEvents = (leagueId: string, season: string) => {
           setCachedData(cacheKey, events.slice(0, 15));
         }
       } catch (err) {
-        console.error("❌ Failed to fetch past events:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch past events",
-        );
+        console.warn("⚠️ Failed to fetch past events:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch past events");
         setEvents([]);
       } finally {
         setLoading(false);
@@ -153,7 +139,7 @@ export const useSportsDBPastEvents = (leagueId: string, season: string) => {
     fetchPastEvents();
   }, [leagueId, season]);
 
-  return { events, loading, error };
+  return {events, loading, error};
 };
 
 // キーワードでイベント検索（オプション機能）
@@ -184,16 +170,9 @@ export const useSportsDBEventSearch = (keyword: string) => {
       setError(null);
 
       try {
-        const url = `${SPORTSDB_API_BASE_URL}/searchevents.php?e=${encodeURIComponent(keyword)}`;
-        console.log("🔍 Searching events:", url);
+        console.log("🔍 Searching events:", keyword);
 
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(`API Error: ${response.status}`);
-        }
-
-        const data: SportsDBResponse = await response.json();
+        const data = await fetchFromProxy({type: "search", q: keyword});
         const events = data.events || [];
 
         console.log("✅ Search results:", events.length, "events");
@@ -203,7 +182,7 @@ export const useSportsDBEventSearch = (keyword: string) => {
           setCachedData(cacheKey, events);
         }
       } catch (err) {
-        console.error("❌ Search failed:", err);
+        console.warn("⚠️ Search failed:", err);
         setError(err instanceof Error ? err.message : "Search failed");
         setEvents([]);
       } finally {
@@ -214,7 +193,7 @@ export const useSportsDBEventSearch = (keyword: string) => {
     fetchEvents();
   }, [keyword]);
 
-  return { events, loading, error };
+  return {events, loading, error};
 };
 
 // チーム検索
@@ -245,16 +224,9 @@ export const useSportsDBTeamSearch = (teamName: string) => {
       setError(null);
 
       try {
-        const url = `${SPORTSDB_API_BASE_URL}/searchteams.php?t=${encodeURIComponent(teamName)}`;
-        console.log("🔍 Searching teams:", url);
+        console.log("🔍 Searching teams:", teamName);
 
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(`API Error: ${response.status}`);
-        }
-
-        const data: SportsDBResponse = await response.json();
+        const data = await fetchFromProxy({type: "teams", q: teamName});
         const teams = data.teams || [];
 
         console.log("✅ Teams found:", teams.length);
@@ -264,7 +236,7 @@ export const useSportsDBTeamSearch = (teamName: string) => {
           setCachedData(cacheKey, teams);
         }
       } catch (err) {
-        console.error("❌ Team search failed:", err);
+        console.warn("⚠️ Team search failed:", err);
         setError(err instanceof Error ? err.message : "Team search failed");
         setTeams([]);
       } finally {
@@ -275,30 +247,23 @@ export const useSportsDBTeamSearch = (teamName: string) => {
     fetchTeams();
   }, [teamName]);
 
-  return { teams, loading, error };
+  return {teams, loading, error};
 };
 
 // 統合スポーツ情報フック
-// ⚠️ `enabled` パラメータを追加。呼び出し側（MuiSidebar.tsx）で
-//   スポーツカテゴリの時だけ true を渡すことで、他カテゴリでの
-//   無駄なthesportsdb.comへのリクエストを止める。
-//   MuiSidebar.tsx側の呼び出しを
-//     useSportsDBAPI(shouldShowSports ? sportsKeyword : "")
-//   から
-//     useSportsDBAPI(sportsKeyword, shouldShowSports)
-//   に変更してください。
+// 呼び出し側（MuiSidebar.tsx）は
+//   useSportsDBAPI(sportsKeyword, shouldShowSports)
+// の形で呼ぶこと。スポーツカテゴリ以外では fetch しない。
 export const useSportsDBAPI = (keyword?: string, enabled: boolean = true) => {
-  const nextEvents = useSportsDBNextEvents(
-    MAJOR_SOCCER_LEAGUES.premierLeague,
-    enabled && !keyword,
-  );
+  // ✅ 次節は常に取得し、キーワード検索が0件のときのフォールバックにする
+  const nextEvents = useSportsDBNextEvents(MAJOR_SOCCER_LEAGUES.premierLeague, enabled);
 
   const searchEvents = useSportsDBEventSearch(enabled ? keyword || "" : "");
 
-  const events =
-    searchEvents.events.length > 0 ? searchEvents.events : nextEvents.events;
-  const loading = keyword ? searchEvents.loading : nextEvents.loading;
-  const error = keyword ? searchEvents.error : nextEvents.error;
+  const hasSearchResult = searchEvents.events.length > 0;
+  const events = hasSearchResult ? searchEvents.events : nextEvents.events;
+  const loading = nextEvents.loading || searchEvents.loading;
+  const error = hasSearchResult ? null : nextEvents.error;
 
   return {
     events: enabled ? events : [],

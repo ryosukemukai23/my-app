@@ -1,54 +1,88 @@
 // utils/redisClient.ts
 import Redis from "ioredis";
 
-const REDIS_URL = process.env.REDIS_URL as string;
+const REDIS_URL = process.env.REDIS_URL;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __redisClient: Redis | undefined;
+
+  var __redisDownUntil: number | undefined;
 }
 
-// ✅ 開発中のNext.jsホットリロードで接続が重複生成されるのを防ぐため、
-//   globalに保持して使い回す（本番では毎回新規生成でも実害はない）
-export const redis: Redis =
-  global.__redisClient ??
-  new Redis(REDIS_URL, {
-    maxRetriesPerRequest: 3,
+// ✅ 接続失敗後、この時間はRedisを一切呼ばない（毎リクエストの待ちを防ぐ）
+const COOLDOWN_MS = 60 * 1000;
+
+const createClient = (): Redis | null => {
+  if (!REDIS_URL) {
+    console.warn("⚠️ [Redis] REDIS_URL が未設定のためキャッシュを無効化します");
+    return null;
+  }
+
+  const client = new Redis(REDIS_URL, {
+    maxRetriesPerRequest: 1,
+    connectTimeout: 3000,
+    commandTimeout: 1000,
+    enableOfflineQueue: false, // ✅ 未接続時にコマンドを溜めず、即エラーにする
+    retryStrategy: (times) => (times > 2 ? null : 500), // ✅ 再接続は2回まで
+    lazyConnect: false,
   });
 
-if (process.env.NODE_ENV !== "production") {
-  global.__redisClient = redis;
-}
+  client.on("error", (err) => {
+    // ✅ 失敗時はクールダウンに入る。ログは1行だけ。
+    if (!global.__redisDownUntil || Date.now() > global.__redisDownUntil) {
+      console.error("❌ [Redis] Connection error:", err.message);
+    }
+    global.__redisDownUntil = Date.now() + COOLDOWN_MS;
+  });
 
-redis.on("error", (err) => {
-  console.error("❌ [Redis] Connection error:", err);
-});
+  client.on("ready", () => {
+    global.__redisDownUntil = undefined;
+  });
+
+  return client;
+};
+
+const getClient = (): Redis | null => {
+  if (global.__redisClient) return global.__redisClient;
+
+  const client = createClient();
+  if (client) global.__redisClient = client;
+
+  return client;
+};
+
+const isAvailable = (): boolean => {
+  if (!REDIS_URL) return false;
+  return !(global.__redisDownUntil && Date.now() < global.__redisDownUntil);
+};
 
 // ✅ 記事データの永続キャッシュ用ヘルパー
-const ARTICLE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30日。無期限にすると際限なく肥大化するため上限を設ける
+const ARTICLE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30日
 
 export const cacheArticle = async (articleId: string, data: unknown) => {
+  if (!isAvailable()) return;
+
+  const client = getClient();
+  if (!client) return;
+
   try {
-    await redis.set(
-      `article:${articleId}`,
-      JSON.stringify(data),
-      "EX",
-      ARTICLE_TTL_SECONDS,
-    );
-  } catch (err) {
-    // ✅ Redis障害時もサイト全体を止めないよう、ログのみに留める
-    console.error("❌ [Redis] Failed to cache article:", articleId, err);
+    await client.set(`article:${articleId}`, JSON.stringify(data), "EX", ARTICLE_TTL_SECONDS);
+  } catch {
+    global.__redisDownUntil = Date.now() + COOLDOWN_MS;
   }
 };
 
-export const getCachedArticle = async <T>(
-  articleId: string,
-): Promise<T | null> => {
+export const getCachedArticle = async <T>(articleId: string): Promise<T | null> => {
+  if (!isAvailable()) return null;
+
+  const client = getClient();
+  if (!client) return null;
+
   try {
-    const raw = await redis.get(`article:${articleId}`);
+    const raw = await client.get(`article:${articleId}`);
     return raw ? (JSON.parse(raw) as T) : null;
-  } catch (err) {
-    console.error("❌ [Redis] Failed to read article:", articleId, err);
+  } catch {
+    global.__redisDownUntil = Date.now() + COOLDOWN_MS;
     return null;
   }
 };

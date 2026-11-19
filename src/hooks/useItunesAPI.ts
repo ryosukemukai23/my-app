@@ -1,8 +1,8 @@
 // hooks/useItunesAPI.ts
 "use client";
 
-import { getCachedData, setCachedData } from "@/utils/cacheUtils";
-import { useEffect, useState } from "react";
+import {getCachedData, setCachedData} from "@/utils/cacheUtils";
+import {useEffect, useState} from "react";
 
 export interface ItunesTrack {
   trackId: number;
@@ -27,42 +27,41 @@ interface CachedItunesData {
   source: "search" | "chart";
 }
 
+// ✅ route.ts 側は最大 5秒 × 2回（検索→チャート）なので、それより少し長く待つ
+const CLIENT_TIMEOUT_MS = 12000;
+
 export const useItunesSearch = (keyword: string, limit: number = 5) => {
   const [tracks, setTracks] = useState<ItunesTrack[]>([]);
-  // 追加: sourceの状態管理
   const [source, setSource] = useState<"search" | "chart">("search");
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const normalizedKeyword = keyword.trim();
+    const controller = new AbortController();
     let cancelled = false;
 
+    // ✅ 応答が返らなくても、一定時間で必ず打ち切る
+    const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+
     const fetchTracks = async () => {
-      // キャッシュ構造が変わるため、キーを v4 に更新
       const cacheKey = normalizedKeyword
-        ? `itunes_search_v4_${normalizedKeyword
-            .toLowerCase()
-            .replace(/\s+/g, " ")}_${limit}`
+        ? `itunes_search_v4_${normalizedKeyword.toLowerCase().replace(/\s+/g, " ")}_${limit}`
         : `itunes_chart_v4_${limit}`;
 
       const cached = getCachedData<CachedItunesData>(cacheKey);
 
-      if (cached && !Array.isArray(cached)) {
-        // 念のため古い配列キャッシュを弾く
-        if (!cancelled) {
-          setTracks(cached.tracks);
-          setSource(cached.source);
-          setLoading(false);
-          setError(null);
-        }
+      // 古い配列キャッシュ・空のキャッシュは使わない
+      if (cached && !Array.isArray(cached) && cached.tracks?.length > 0) {
+        setTracks(cached.tracks);
+        setSource(cached.source);
+        setLoading(false);
+        setError(null);
         return;
       }
 
-      if (!cancelled) {
-        setLoading(true);
-        setError(null);
-      }
+      setLoading(true);
+      setError(null);
 
       try {
         const params = new URLSearchParams({
@@ -70,13 +69,11 @@ export const useItunesSearch = (keyword: string, limit: number = 5) => {
           limit: Math.max(limit * 4, 20).toString(),
         });
 
-        const response = await fetch(
-          `/api/itunes/search?${params.toString()}`,
-          {
-            method: "GET",
-            cache: "no-store",
-          },
-        );
+        const response = await fetch(`/api/itunes/search?${params.toString()}`, {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
 
         if (!response.ok) {
           throw new Error(`API Error: ${response.status}`);
@@ -88,23 +85,26 @@ export const useItunesSearch = (keyword: string, limit: number = 5) => {
           return;
         }
 
-        const results = Array.isArray(data.results)
-          ? data.results.slice(0, limit)
-          : [];
+        const results = Array.isArray(data.results) ? data.results.slice(0, limit) : [];
         const resultSource = data.source || "search";
 
         setTracks(results);
-        setSource(resultSource); // 取得したsourceをセット
+        setSource(resultSource);
 
-        // オブジェクトとしてキャッシュを保存
-        setCachedData(cacheKey, { tracks: results, source: resultSource });
+        // ✅ 空の結果はキャッシュしない（24時間空のままになるのを防ぐ）
+        if (results.length > 0) {
+          setCachedData(cacheKey, {tracks: results, source: resultSource});
+        }
       } catch (err) {
         if (cancelled) {
           return;
         }
-        setError(err instanceof Error ? err.message : "Failed to fetch tracks");
+
+        const isTimeout = err instanceof DOMException && err.name === "AbortError";
+        setError(isTimeout ? "Timeout" : err instanceof Error ? err.message : "Failed to fetch tracks");
         setTracks([]);
       } finally {
+        clearTimeout(timeoutId);
         if (!cancelled) {
           setLoading(false);
         }
@@ -115,10 +115,11 @@ export const useItunesSearch = (keyword: string, limit: number = 5) => {
 
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
+      controller.abort();
     };
   }, [keyword, limit]);
 
-  // 返り値に source を追加
   return {
     tracks,
     source,

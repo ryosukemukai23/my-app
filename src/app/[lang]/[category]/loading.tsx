@@ -1,6 +1,4 @@
-// app/[lang]/[category]/loading.tsx
-"use client";
-
+// app/[lang]/article/[id]/loading.tsx
 import {Box, CircularProgress} from "@mui/material";
 
 export default function Loading() {
@@ -10,7 +8,7 @@ export default function Loading() {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        minHeight: "50vh",
+        minHeight: "60vh",
       }}
     >
       <CircularProgress />
