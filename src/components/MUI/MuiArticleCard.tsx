@@ -39,7 +39,9 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
       <CardActionArea
         component={NextLink}
         href={href ?? "#"}
-        prefetch
+        // ✅ 記事ページは force-dynamic。プリフェッチすると表示中の全記事分
+        //   NewsData を叩いてレート制限に当たるため、必ず無効にする。
+        prefetch={false}
         sx={{
           flexGrow: 1,
           display: "flex",
@@ -47,7 +49,6 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
           alignItems: "stretch",
         }}
       >
-        {/* サムネイル画像 - サイズ統一 */}
         {article.image_url && (
           <CardMedia
             component="img"
@@ -69,14 +70,12 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
         )}
 
         <CardContent sx={{flexGrow: 1, display: "flex", flexDirection: "column"}}>
-          {/* カテゴリタグ */}
           {article.categories && article.categories.length > 0 && (
             <Box sx={{mb: 1.5}}>
               <Chip label={article.categories[0]} size="small" color="primary" sx={{fontWeight: 600}} />
             </Box>
           )}
 
-          {/* タイトル */}
           <Typography
             variant="h6"
             component="h3"
@@ -93,7 +92,6 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
             {article.title}
           </Typography>
 
-          {/* 説明文 */}
           {article.description && (
             <Typography
               variant="body2"
@@ -111,7 +109,6 @@ const MuiArticleCard: React.FC<MuiArticleCardProps> = ({article}) => {
             </Typography>
           )}
 
-          {/* メタ情報 */}
           <Box
             sx={{
               display: "flex",
