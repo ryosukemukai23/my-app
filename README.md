@@ -1,172 +1,105 @@
-# News Portal - AI-Powered News Platform
+# News Portal
 
-ニュース連動型リッチコンテンツサイト（ポートフォリオ用）
+ニュース記事に連動して、天気・商品・音楽・スポーツ情報を表示するニュースサイトです。
+Next.js (App Router) の Server Component によるデータ取得と、複数の外部 API の統合を主眼に作りました。
 
-## 🎯 プロジェクト概要
+**Demo**: https://my-app-teal-nu.vercel.app/ja/top
 
-- **デザイン**: 白黒ベース、アクセントカラー #801b2b
-- **機能**: タブ切替型ニュース表示、天気予報、楽天商品表示、Spotify/SportsDB 連携
-- **技術スタック**: Next.js 14 + TypeScript + TailwindCSS + **Material-UI (MUI)**
-- **特徴**: ダークモード対応、多言語対応（日本語/英語）、AI 補助によるレコメンド機能
+## 特徴
 
-## 🎨 UI フレームワーク
+- カテゴリ別ニュース一覧（10 カテゴリ）と記事詳細、関連記事
+- 日本語 / 英語の切り替え、ダークモード
+- 記事ごとに連動するサイドバー（天気・楽天商品・Apple Music・SportsDB）
+- カーソル方式のページネーション
+- Canvas 2D によるロゴ・天気アイコンのアニメーション
 
-このプロジェクトは**TailwindCSS と Material-UI のハイブリッド構成**です：
+## 技術スタック
 
-### TailwindCSS
+| 分類           | 使用技術                                      |
+| -------------- | --------------------------------------------- |
+| フレームワーク | Next.js 16 (App Router) / React / TypeScript  |
+| UI             | Material-UI (MUI) / Tailwind CSS v4 / Emotion |
+| 状態管理       | React Context API                             |
+| デプロイ       | Vercel                                        |
 
-- グローバルスタイル
-- カスタムユーティリティクラス
-- 細かいスタイル調整
+## 使用 API
 
-### Material-UI (MUI)
+| API                       | 用途           | キー             |
+| ------------------------- | -------------- | ---------------- |
+| NewsData.io               | ニュース記事   | 必須             |
+| OpenWeatherMap            | 天気           | 必須             |
+| 楽天ウェブサービス        | 関連商品       | 必須             |
+| iTunes Search / Apple RSS | 楽曲・チャート | 不要             |
+| TheSportsDB               | スポーツ       | 不要（無料キー） |
 
-- **主要コンポーネント**: Header, ArticleCard, Sidebar, Pagination
-- **テーマシステム**: ライト/ダークモード統一管理
-- **アイコン**: @mui/icons-material
-- **レスポンシブグリッド**: Grid システム
+## アーキテクチャ
 
-## 🚀 セットアップ
+1. **Server Component でデータ取得**
+   一覧・記事詳細・関連記事は `utils/serverNewsAPI.ts` をサーバー側で直接呼びます。API キーはブラウザに露出しません。
+2. **外部 API は Route Handler で中継**
+   楽天・iTunes・SportsDB は `app/api/*` 経由で呼びます。CORS 回避、キーの秘匿、サーバー側キャッシュ、タイムアウト制御（iTunes は 5 秒）が目的です。
+3. **キャッシュ設計**
+   NewsData.io の無料枠（1 日 100 リクエスト）に合わせ、一覧は `revalidate` で 3 時間キャッシュしています。クライアント側は `localStorage` に API 結果を保存します。
+4. **ページネーション**
+   NewsData.io の `nextPage` トークンを URL の `cursor` に載せる方式です。ページ番号方式ではありません。
+5. **多言語**
+   URL の `[lang]` セグメントで言語を決定します。
 
-### 1. 依存関係のインストール
+## ディレクトリ構成
+
+```
+src
+├─ app
+│  ├─ [lang]
+│  │  ├─ [category]      # カテゴリ別一覧
+│  │  └─ article/[id]    # 記事詳細
+│  └─ api                # itunes / rakuten / sportsdb の中継
+├─ components            # MUI 版コンポーネント、3D アイコン
+├─ contexts              # Dark mode / Language / MUI theme
+├─ hooks                 # 外部 API 取得フック
+├─ theme                 # MUI テーマ
+├─ types                 # 型定義
+└─ utils                 # サーバー側 API 取得、キャッシュ、日付整形
+```
+
+## セットアップ
 
 ```bash
 npm install
-```
-
-必要なパッケージ：
-
-- `@mui/material` - MUI コアライブラリ
-- `@emotion/react` - MUI のスタイリングエンジン
-- `@emotion/styled` - スタイル付きコンポーネント
-- `@mui/icons-material` - MUI アイコン
-- `lucide-react` - 補助アイコン
-
-### 2. 環境変数の設定
-
-`.env.local.example` を `.env.local` にコピーして、API キーを設定してください。
-
-```bash
-cp .env.local.example .env.local
-```
-
-### 3. 開発サーバーの起動
-
-```bash
+cp .env.local.example .env.local   # プロジェクト直下に置く
 npm run dev
 ```
 
-ブラウザで [http://localhost:3000](http://localhost:3000) を開きます。
+`.env.local` に設定する環境変数：
 
-## 📁 ディレクトリ構造
+| 変数                  | 内容                                     |
+| --------------------- | ---------------------------------------- |
+| `NEWSDATA_API_KEY`    | NewsData.io の API キー                  |
+| `OPENWEATHER_API_KEY` | OpenWeatherMap の API キー               |
+| `RAKUTEN_APP_ID`      | 楽天のアプリケーション ID                |
+| `RAKUTEN_ACCESS_KEY`  | 楽天のアクセスキー                       |
+| `RAKUTEN_ORIGIN`      | 楽天 API に送る Origin（デプロイ先 URL） |
 
-```
-/src
-├─ /app                 # Next.js App Router
-│   ├─ /[lang]         # 言語別ルーティング (MUI版)
-│   │   └─ /[category] # カテゴリ別ページ (MUI版)
-│   ├─ /article/[id]   # 記事詳細ページ
-│   └─ /weather/[country] # 天気詳細ページ
-├─ /components         # コンポーネント
-│   ├─ /MUI           # MUI版コンポーネント ⭐
-│   │   ├─ MuiHeader.tsx
-│   │   ├─ MuiArticleCard.tsx
-│   │   ├─ MuiSidebar.tsx
-│   │   └─ MuiPagination.tsx
-│   ├─ /3D            # 3Dコンポーネント
-│   └─ (その他)
-├─ /theme             # MUIテーマ ⭐
-│   └─ muiTheme.ts
-├─ /hooks             # カスタムフック
-├─ /contexts          # Context API
-│   ├─ DarkModeContext.tsx
-│   ├─ LanguageContext.tsx
-│   └─ MuiThemeContext.tsx ⭐
-├─ /types             # 型定義
-├─ /utils             # ユーティリティ
-└─ /styles            # スタイル
-```
+天気のキーの変数名は、実際のコードに合わせて修正してください。
 
-## 🎨 MUI 実装詳細
+## 開発で苦労した点と対応
 
-### テーマ設定
+- **本番だけ極端に遅い**
+  原因は、廃止済みの Redis への接続待ちが、ページ表示のたびに発生していたことでした。Vercel のログから特定し、依存を外して解消しました。
+- **外部 API が応答しないと画面が止まる**
+  iTunes ルートにタイムアウトを入れ、検索 → チャートの順でフォールバックするようにしました。
+- **無料枠の API を守る設計**
+  キャッシュ期間を揃え、リンクのプリフェッチを無効化して、無駄なリクエストを減らしました。
+- **ブラウザから外部 API を直接呼ぶと失敗する**
+  CORS を避けるため、Route Handler で中継する構成にしました。
 
-`src/theme/muiTheme.ts` でライト/ダークモードのテーマを定義：
+## 既知の制約
 
-- プライマリカラー: #801b2b (アクセントカラー)
-- カスタムシャドウ
-- タイポグラフィ設定
+- NewsData.io の無料プランは、最新記事の配信が約 12 時間遅れます。
+- 記事詳細は 48 時間より古い記事を取得できません。
 
-### Context 統合
+## 今後の改善
 
-`app/layout.tsx` で以下の順序で Provider 配置：
-
-1. DarkModeProvider
-2. LanguageProvider
-3. **MuiThemeProvider** ← ダークモード状態を監視
-
-### MUI vs Tailwind 使い分け
-
-| 要素               | 使用技術 | 理由                        |
-| ------------------ | -------- | --------------------------- |
-| Header             | MUI      | AppBar, Tabs, IconButton    |
-| ArticleCard        | MUI      | Card, CardMedia, Typography |
-| Sidebar            | MUI      | Card, List, Avatar          |
-| Pagination         | MUI      | Pagination コンポーネント   |
-| 3D アイコン        | Canvas   | カスタム 3D 効果            |
-| グローバルスタイル | Tailwind | 統一されたユーティリティ    |
-
-## 🎯 主な機能
-
-### ニュース表示
-
-- The News API を使用した記事取得
-- カテゴリ別表示（11 カテゴリ）
-- フリーワード検索（top カテゴリ）
-- **MUI Pagination** によるページネーション
-
-### サイドバー
-
-- **MUI Card** ベースのレイアウト
-- 現在地の天気 + 5 日間予報
-- 楽天商品トップ 5 件表示
-- Spotify 音楽表示（Entertainment カテゴリ）
-- SportsDB 情報表示（Sports カテゴリ）
-
-### UI/UX
-
-- **MUI AppBar** によるヘッダー
-- **MUI Tabs** によるカテゴリナビゲーション
-- **MUI Theme** によるダークモード対応
-- レスポンシブ **Grid** システム
-- 3D 天気アイコン・ロゴ
-
-## 🔑 使用 API
-
-| API            | 用途             | API キー                   |
-| -------------- | ---------------- | -------------------------- |
-| The News API   | ニュース記事取得 | 必須                       |
-| OpenWeatherMap | 天気情報         | 必須                       |
-| Rakuten API    | 商品情報         | 必須                       |
-| Spotify API    | 音楽情報         | 必須（Client ID + Secret） |
-| SportsDB API   | スポーツ情報     | 不要（無料版）             |
-
-## 🛠️ 技術スタック
-
-- **フレームワーク**: Next.js 14 (App Router)
-- **言語**: TypeScript
-- **UI ライブラリ**: Material-UI (MUI) v5 ⭐
-- **スタイリング**: TailwindCSS v4 + Emotion (MUI)
-- **アイコン**: @mui/icons-material + Lucide React
-- **状態管理**: React Context API
-- **データ取得**: Fetch API
-
-## 📊 ポートフォリオアピールポイント
-
-✅ **モダンな UI フレームワーク**: MUI v5 の最新機能を活用  
-✅ **ハイブリッド構成**: Tailwind + MUI の組み合わせスキル  
-✅ **テーマシステム**: ダークモード完全対応  
-✅ **レスポンシブデザイン**: MUI Grid による柔軟なレイアウト  
-✅ **TypeScript 完全対応**: 型安全な実装  
-✅ **複数 API 統合**: 5 つの外部 API を統合管理
-
+- 記事データの永続キャッシュ（Redis などの再導入）
+- テストの追加
+- 日時表示の日本時間対応
