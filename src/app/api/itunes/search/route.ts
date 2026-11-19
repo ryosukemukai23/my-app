@@ -163,10 +163,16 @@ function diversifyTracks(results: ItunesRawTrack[], limit: number) {
 }
 
 /**
- * アクセス元の国コードを推定（Vercel / Cloudflare のヘッダーを利用）。
- * 取得できなければ "JP" にフォールバック。
+ * 国コードを決定する。
+ * 1. クエリの ?country=XX（2文字のアルファベット）があればそれを優先
+ * 2. なければアクセス元の国を推定（Vercel / Cloudflare のヘッダー）
+ * 3. それも取れなければ "JP"
  */
-function detectCountry(request: NextRequest): string {
+function detectCountry(request: NextRequest, countryParam?: string | null): string {
+  if (countryParam && /^[A-Za-z]{2}$/.test(countryParam.trim())) {
+    return countryParam.trim().toUpperCase();
+  }
+
   const raw = request.headers.get("x-vercel-ip-country") || request.headers.get("cf-ipcountry") || "JP";
 
   const country = raw.toUpperCase();
@@ -227,7 +233,7 @@ export async function GET(request: NextRequest) {
 
   const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 20) : 5;
 
-  const country = detectCountry(request);
+  const country = detectCountry(request, searchParams.get("country"));
 
   /*
    * チャートへのフォールバック処理をまとめたヘルパー。

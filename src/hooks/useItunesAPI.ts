@@ -30,7 +30,7 @@ interface CachedItunesData {
 // ✅ route.ts 側は最大 5秒 × 2回（検索→チャート）なので、それより少し長く待つ
 const CLIENT_TIMEOUT_MS = 12000;
 
-export const useItunesSearch = (keyword: string, limit: number = 5) => {
+export const useItunesSearch = (keyword: string, limit: number = 5, country?: string) => {
   const [tracks, setTracks] = useState<ItunesTrack[]>([]);
   const [source, setSource] = useState<"search" | "chart">("search");
   const [loading, setLoading] = useState<boolean>(false);
@@ -38,6 +38,7 @@ export const useItunesSearch = (keyword: string, limit: number = 5) => {
 
   useEffect(() => {
     const normalizedKeyword = keyword.trim();
+    const normalizedCountry = country?.trim().toUpperCase() || "";
     const controller = new AbortController();
     let cancelled = false;
 
@@ -45,9 +46,12 @@ export const useItunesSearch = (keyword: string, limit: number = 5) => {
     const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
 
     const fetchTracks = async () => {
+      // 国コード指定がある場合だけキーに含める（未指定の既存キャッシュ形式は維持）
+      const countrySuffix = normalizedCountry ? `_${normalizedCountry}` : "";
+
       const cacheKey = normalizedKeyword
-        ? `itunes_search_v4_${normalizedKeyword.toLowerCase().replace(/\s+/g, " ")}_${limit}`
-        : `itunes_chart_v4_${limit}`;
+        ? `itunes_search_v4_${normalizedKeyword.toLowerCase().replace(/\s+/g, " ")}_${limit}${countrySuffix}`
+        : `itunes_chart_v4_${limit}${countrySuffix}`;
 
       const cached = getCachedData<CachedItunesData>(cacheKey);
 
@@ -68,6 +72,10 @@ export const useItunesSearch = (keyword: string, limit: number = 5) => {
           term: normalizedKeyword,
           limit: Math.max(limit * 4, 20).toString(),
         });
+
+        if (normalizedCountry) {
+          params.set("country", normalizedCountry);
+        }
 
         const response = await fetch(`/api/itunes/search?${params.toString()}`, {
           method: "GET",
@@ -118,7 +126,7 @@ export const useItunesSearch = (keyword: string, limit: number = 5) => {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [keyword, limit]);
+  }, [keyword, limit, country]);
 
   return {
     tracks,
