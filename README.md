@@ -5,11 +5,15 @@ Next.js (App Router) の Server Component によるデータ取得と、複数�
 
 **Demo**: https://my-app-teal-nu.vercel.app/ja/top
 
+<!-- スクリーンショットを docs/ に置いて、ここに貼ってください
+![画面イメージ](docs/screenshot.png)
+-->
+
 ## 特徴
 
 - カテゴリ別ニュース一覧（10 カテゴリ）と記事詳細、関連記事
 - 日本語 / 英語の切り替え、ダークモード
-- 記事ごとに連動するサイドバー（天気・楽天商品・Apple Music・SportsDB）
+- 記事ごとに連動するサイドバー（楽天商品・Apple Music・SportsDB）と、現在地の天気
 - カーソル方式のページネーション
 - Canvas 2D によるロゴ・天気アイコンのアニメーション
 
@@ -24,20 +28,20 @@ Next.js (App Router) の Server Component によるデータ取得と、複数�
 
 ## 使用 API
 
-| API                       | 用途           | キー             |
-| ------------------------- | -------------- | ---------------- |
-| NewsData.io               | ニュース記事   | 必須             |
-| OpenWeatherMap            | 天気           | 必須             |
-| 楽天ウェブサービス        | 関連商品       | 必須             |
-| iTunes Search / Apple RSS | 楽曲・チャート | 不要             |
-| TheSportsDB               | スポーツ       | 不要（無料キー） |
+| API                       | 用途           | キー                   |
+| ------------------------- | -------------- | ---------------------- |
+| NewsData.io               | ニュース記事   | 必須                   |
+| OpenWeatherMap            | 天気           | 必須                   |
+| 楽天ウェブサービス        | 関連商品       | 必須                   |
+| iTunes Search / Apple RSS | 楽曲・チャート | 不要                   |
+| TheSportsDB               | スポーツ       | 無料の公開キーで利用可 |
 
 ## アーキテクチャ
 
 1. **Server Component でデータ取得**
    一覧・記事詳細・関連記事は `utils/serverNewsAPI.ts` をサーバー側で直接呼びます。API キーはブラウザに露出しません。
 2. **外部 API は Route Handler で中継**
-   楽天・iTunes・SportsDB は `app/api/*` 経由で呼びます。CORS 回避、キーの秘匿、サーバー側キャッシュ、タイムアウト制御（iTunes は 5 秒）が目的です。
+   天気・楽天・iTunes・SportsDB は `app/api/*` 経由で呼びます。CORS 回避、キーの秘匿、サーバー側キャッシュ、タイムアウト制御（iTunes・天気は 5 秒）が目的です。天気は座標を小数第 2 位に丸めて送り、10 分間キャッシュします。
 3. **キャッシュ設計**
    NewsData.io の無料枠（1 日 100 リクエスト）に合わせ、一覧は `revalidate` で 3 時間キャッシュしています。クライアント側は `localStorage` に API 結果を保存します。
 4. **ページネーション**
@@ -53,7 +57,7 @@ src
 │  ├─ [lang]
 │  │  ├─ [category]      # カテゴリ別一覧
 │  │  └─ article/[id]    # 記事詳細
-│  └─ api                # itunes / rakuten / sportsdb の中継
+│  └─ api                # weather / itunes / rakuten / sportsdb の中継
 ├─ components            # MUI 版コンポーネント、3D アイコン
 ├─ contexts              # Dark mode / Language / MUI theme
 ├─ hooks                 # 外部 API 取得フック
@@ -72,15 +76,15 @@ npm run dev
 
 `.env.local` に設定する環境変数：
 
-| 変数                  | 内容                                     |
-| --------------------- | ---------------------------------------- |
-| `NEWSDATA_API_KEY`    | NewsData.io の API キー                  |
-| `OPENWEATHER_API_KEY` | OpenWeatherMap の API キー               |
-| `RAKUTEN_APP_ID`      | 楽天のアプリケーション ID                |
-| `RAKUTEN_ACCESS_KEY`  | 楽天のアクセスキー                       |
-| `RAKUTEN_ORIGIN`      | 楽天 API に送る Origin（デプロイ先 URL） |
-
-天気のキーの変数名は、実際のコードに合わせて修正してください。
+| 変数                   | 内容                                          |
+| ---------------------- | --------------------------------------------- |
+| `NEWSDATA_API_KEY`     | NewsData.io の API キー                       |
+| `OPENWEATHER_API_KEY`  | OpenWeatherMap の API キー                    |
+| `RAKUTEN_APP_ID`       | 楽天のアプリケーション ID                     |
+| `RAKUTEN_ACCESS_KEY`   | 楽天のアクセスキー                            |
+| `RAKUTEN_AFFILIATE_ID` | 楽天のアフィリエイト ID                       |
+| `RAKUTEN_ORIGIN`       | 楽天 API に送る Origin（デプロイ先 URL）      |
+| `SPORTSDB_API_KEY`     | TheSportsDB の API キー（無料の公開キーで可） |
 
 ## 開発で苦労した点と対応
 
